@@ -1,0 +1,17 @@
+# Godot project files are text. Keep diffs readable for humans and agents.
+*.gd      text eol=lf diff
+*.tscn    text eol=lf diff
+*.tres    text eol=lf diff
+*.godot   text eol=lf diff
+*.cfg     text eol=lf diff
+*.md      text eol=lf diff
+*.sh      text eol=lf
+*.yml     text eol=lf
+
+# Binary assets - never diff, never merge.
+*.png     binary
+*.jpg     binary
+*.glb     binary
+*.gltf    binary
+*.ogg     binary
+*.wav     binary

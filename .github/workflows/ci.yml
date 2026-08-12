@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7"
+  GODOT_RELEASE: "stable"
+
+jobs:
+  test:
+    name: Headless tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the Godot binary
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-linux
+
+      - name: Install runtime libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 libgl1 libasound2
+
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot-bin
+          ARCHIVE="Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_linux.x86_64.zip"
+          URL="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/${ARCHIVE}"
+          curl -fsSL -o /tmp/godot.zip "$URL"
+          unzip -q -o /tmp/godot.zip -d /tmp
+          mv "/tmp/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_linux.x86_64" ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Report version
+        run: godot --version
+
+      - name: Build the import cache
+        run: bash scripts/import.sh
+
+      - name: Run the test suite
+        run: bash scripts/test.sh
+
+      - name: Headless smoke run
+        run: bash scripts/smoke.sh
+
+      # The suite never builds a view and the smoke run never starts a wave, so
+      # without this step nothing in CI executes game/views/ at all.
+      - name: Headless autoplay
+        run: bash scripts/autoplay.sh

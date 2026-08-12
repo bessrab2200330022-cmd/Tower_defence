@@ -1,0 +1,639 @@
+class_name Simulation
+extends RefCounted
+## The whole game, minus pixels.
+##
+## Rules for this file (and everything under `sim/`):
+##   * No Node, no SceneTree, no `delta` from the engine, no Input, no rendering.
+##   * Exactly one entry point advances time: `step()`. One call == one tick.
+##   * The view layer reads `drain_events()`; it never mutates state directly.
+##   * All randomness goes through `rng`. Never call randi()/randf() here.
+##
+## That is what makes `snapshot_hash()` reproducible, which is what makes bugs
+## reproducible, which is the whole reason the layer exists.
+
+const Types := preload("res://sim/sim_types.gd")
+const GridScript := preload("res://sim/grid.gd")
+const PathFinderScript := preload("res://sim/path_finder.gd")
+const RngScript := preload("res://sim/rng.gd")
+const EconomyScript := preload("res://sim/economy.gd")
+const DamageScript := preload("res://sim/damage.gd")
+const TargetingScript := preload("res://sim/targeting.gd")
+const WaveDirectorScript := preload("res://sim/wave_director.gd")
+const EnemyScript := preload("res://sim/entities/enemy_state.gd")
+const TowerScript := preload("res://sim/entities/tower_state.gd")
+const ProjectileScript := preload("res://sim/entities/projectile_state.gd")
+
+## Awarded when a wave is fully cleared, on top of individual bounties.
+const WAVE_CLEAR_BONUS: int = 25
+
+## Command names accepted by `apply_command`. These are the on-disk vocabulary of
+## a saved command log, so renaming one invalidates every save and replay - treat
+## them as a format, not as internal identifiers.
+const COMMAND_BUILD := "build"
+const COMMAND_SELL := "sell"
+const COMMAND_START_WAVE := "start_wave"
+const COMMAND_SET_TARGET_MODE := "set_target_mode"
+
+var tick: int = 0
+var phase: int = Types.Phase.BUILD
+var setup_error: String = ""
+## Spawns the director released that never became an enemy. Always 0 for valid
+## content; non-zero means a wave references an enemy id the catalog lacks.
+var dropped_spawns: int = 0
+
+var grid
+var path_finder
+var rng
+var economy
+var wave_director
+var catalog
+var map_def
+
+var enemies: Array = []
+var towers: Array = []
+var projectiles: Array = []
+var waypoints: Array[Vector3] = []
+
+var events: Array[Dictionary] = []
+
+var _next_enemy_id: int = 1
+var _next_tower_id: int = 1
+var _next_projectile_id: int = 1
+var _enemy_by_id: Dictionary = {}
+var _tower_by_cell: Dictionary = {}
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+## Returns true on success. On failure, read `setup_error`.
+func setup(map_resource, catalog_ref, seed_value: int = 1) -> bool:
+	setup_error = ""
+	map_def = map_resource
+	catalog = catalog_ref
+
+	if map_def == null:
+		setup_error = "map_def is null"
+		return false
+	if catalog == null:
+		setup_error = "catalog is null"
+		return false
+
+	grid = GridScript.new()
+	var layout_error: String = grid.load_from_layout(map_def.get_layout(), map_def.cell_size)
+	if layout_error != "":
+		setup_error = "map '%s': %s" % [map_def.id, layout_error]
+		return false
+
+	path_finder = PathFinderScript.new()
+	if not path_finder.build(grid, grid.spawn, grid.goal):
+		setup_error = "map '%s': %s" % [map_def.id, path_finder.last_error]
+		return false
+
+	waypoints = []
+	for cell in path_finder.path:
+		waypoints.append(grid.cell_to_world(cell))
+
+	rng = RngScript.new(seed_value)
+	economy = EconomyScript.new(map_def.starting_credits, map_def.starting_lives)
+
+	var wave_list: Array = []
+	for wave_id in map_def.wave_ids:
+		var wave = catalog.get_wave(str(wave_id))
+		if wave == null:
+			setup_error = "map '%s' references unknown wave '%s'" % [map_def.id, str(wave_id)]
+			return false
+		wave_list.append(wave)
+	if wave_list.is_empty():
+		setup_error = "map '%s' has no waves" % map_def.id
+		return false
+	wave_director = WaveDirectorScript.new(wave_list)
+
+	tick = 0
+	phase = Types.Phase.BUILD
+	dropped_spawns = 0
+	enemies = []
+	towers = []
+	projectiles = []
+	events = []
+	_next_enemy_id = 1
+	_next_tower_id = 1
+	_next_projectile_id = 1
+	_enemy_by_id = {}
+	_tower_by_cell = {}
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Player commands
+# ---------------------------------------------------------------------------
+
+func is_over() -> bool:
+	return phase == Types.Phase.WON or phase == Types.Phase.LOST
+
+
+## Reasons a build would fail, as a message. Empty string means "allowed".
+func build_blocked_reason(cell: Vector2i, tower_id: String) -> String:
+	if is_over():
+		return "the match is over"
+	var def = catalog.get_tower(tower_id)
+	if def == null:
+		return "unknown tower '%s'" % tower_id
+	if not grid.is_buildable(cell):
+		return "cannot build there"
+	if _tower_by_cell.has(cell):
+		return "cell already occupied"
+	if not economy.can_afford(def.cost):
+		return "not enough credits"
+	return ""
+
+
+## The single door into the simulation for player intent.
+##
+## Every command - from live input, from a replayed log, later from a tower
+## active - travels this one path, which is what lets a save be `seed + map id +
+## an ordered command log` and a load be replaying it. The four `try_*` methods
+## below are thin wrappers, kept because they are a nicer call site and because
+## `game/` and the whole test suite already use them.
+##
+## Routing only: validation stays in the `_do_*` implementations where it always
+## was. Returns false for an unknown action or malformed args rather than
+## failing hard - a corrupt replay must not be able to crash the sim, and
+## neither must a typo in a UI call site.
+func apply_command(action: String, args: Dictionary = {}) -> bool:
+	match action:
+		COMMAND_BUILD:
+			if not _arg_is_cell(args, "cell") or not _arg_is_text(args, "tower_id"):
+				return false
+			return _do_build(args["cell"], str(args["tower_id"]))
+		COMMAND_SELL:
+			if not _arg_is_cell(args, "cell"):
+				return false
+			return _do_sell(args["cell"])
+		COMMAND_START_WAVE:
+			return _do_start_next_wave()
+		COMMAND_SET_TARGET_MODE:
+			if not _arg_is_cell(args, "cell") or not _arg_is_int(args, "mode"):
+				return false
+			return _do_set_target_mode(args["cell"], args["mode"])
+	return false
+
+
+# Arg checks are by exact type rather than by duck-typing. A replay that carries
+# a float where a cell belongs is corrupt, and silently coercing it would
+# reproduce the wrong match rather than refusing to reproduce anything.
+
+static func _arg_is_cell(args: Dictionary, key: String) -> bool:
+	return args.has(key) and typeof(args[key]) == TYPE_VECTOR2I
+
+
+static func _arg_is_int(args: Dictionary, key: String) -> bool:
+	return args.has(key) and typeof(args[key]) == TYPE_INT
+
+
+## StringName is accepted alongside String because `.tres` ids arrive as either.
+static func _arg_is_text(args: Dictionary, key: String) -> bool:
+	if not args.has(key):
+		return false
+	var kind: int = typeof(args[key])
+	return kind == TYPE_STRING or kind == TYPE_STRING_NAME
+
+
+func try_build(cell: Vector2i, tower_id: String) -> bool:
+	return apply_command(COMMAND_BUILD, {"cell": cell, "tower_id": tower_id})
+
+
+func try_sell(cell: Vector2i) -> bool:
+	return apply_command(COMMAND_SELL, {"cell": cell})
+
+
+## Begins the next wave. No-op if a wave is already running or none are left.
+func start_next_wave() -> bool:
+	return apply_command(COMMAND_START_WAVE)
+
+
+func set_target_mode(cell: Vector2i, mode: int) -> bool:
+	return apply_command(COMMAND_SET_TARGET_MODE, {"cell": cell, "mode": mode})
+
+
+func _do_build(cell: Vector2i, tower_id: String) -> bool:
+	if build_blocked_reason(cell, tower_id) != "":
+		return false
+	var def = catalog.get_tower(tower_id)
+	if not economy.spend(def.cost):
+		return false
+
+	var tower = TowerScript.new()
+	tower.id = _next_tower_id
+	_next_tower_id += 1
+	tower.def_id = str(def.id)
+	tower.cell = cell
+	tower.position = grid.cell_to_world(cell)
+	tower.range_world = def.range_world
+	tower.damage = def.damage
+	tower.damage_type = def.damage_type
+	tower.fire_interval_ticks = maxi(def.fire_interval_ticks, 1)
+	tower.fire_mode = def.fire_mode
+	tower.projectile_speed = def.projectile_speed
+	tower.splash_radius = def.splash_radius
+	tower.slow_percent = def.slow_percent
+	tower.slow_ticks = def.slow_ticks
+	tower.target_mode = def.target_mode
+	tower.credits_invested = def.cost
+
+	towers.append(tower)
+	_tower_by_cell[cell] = tower
+	_emit(Types.Event.TOWER_BUILT, {"tower_id": tower.id, "def_id": tower.def_id, "cell": cell, "position": tower.position})
+	_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
+	return true
+
+
+func _do_sell(cell: Vector2i) -> bool:
+	if is_over() or not _tower_by_cell.has(cell):
+		return false
+	var tower = _tower_by_cell[cell]
+	var def = catalog.get_tower(tower.def_id)
+	var refund: int = 0
+	if def != null:
+		refund = EconomyScript.refund_for(tower.credits_invested, def.sell_refund_percent)
+	economy.earn(refund)
+
+	_tower_by_cell.erase(cell)
+	towers.erase(tower)
+	_emit(Types.Event.TOWER_SOLD, {"tower_id": tower.id, "cell": cell, "refund": refund})
+	_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
+	return true
+
+
+func tower_at(cell: Vector2i):
+	return _tower_by_cell.get(cell, null)
+
+
+## Rejects modes outside TargetMode. Targeting falls back to FIRST for anything
+## it does not recognise, so an out-of-range value would otherwise be accepted
+## here and then silently ignored every tick.
+func _do_set_target_mode(cell: Vector2i, mode: int) -> bool:
+	if is_over():
+		return false
+	if mode < 0 or mode >= Types.TargetMode.size():
+		return false
+	var tower = tower_at(cell)
+	if tower == null:
+		return false
+	tower.target_mode = mode
+	return true
+
+
+func _do_start_next_wave() -> bool:
+	if phase != Types.Phase.BUILD:
+		return false
+	if not wave_director.start_next(tick):
+		return false
+	phase = Types.Phase.COMBAT
+	var wave = wave_director.current_wave()
+	_emit(Types.Event.WAVE_STARTED, {
+		"wave_index": wave_director.wave_index,
+		"wave_id": str(wave.id) if wave != null else "",
+		"total_waves": wave_director.wave_count(),
+		"enemy_count": wave_director.total_enemies_in_wave(),
+	})
+	return true
+
+
+# ---------------------------------------------------------------------------
+# The tick
+# ---------------------------------------------------------------------------
+
+func step() -> void:
+	if is_over():
+		return
+	tick += 1
+	var delta: float = Types.TICK_DELTA
+
+	if phase == Types.Phase.COMBAT:
+		_spawn_due_enemies()
+
+	_step_enemies(delta)
+	_step_towers(delta)
+	_step_projectiles(delta)
+	_compact_entities()
+	_resolve_phase()
+
+
+func _spawn_due_enemies() -> void:
+	for enemy_id in wave_director.step(tick):
+		_spawn_enemy(enemy_id)
+
+
+func _spawn_enemy(def_id: String) -> void:
+	var def = catalog.get_enemy(def_id)
+	if def == null or waypoints.is_empty():
+		# The director has already counted this spawn, so the wave will still
+		# "clear" - just short a few enemies, and paying the bonus for it.
+		# Catalog.validate() is the real guard; this counter makes the damage
+		# visible to a test instead of scrolling past in the engine log.
+		dropped_spawns += 1
+		return
+
+	var enemy = EnemyScript.new()
+	enemy.id = _next_enemy_id
+	_next_enemy_id += 1
+	enemy.def_id = str(def.id)
+	enemy.max_hp = maxi(def.max_hp, 1)
+	enemy.hp = enemy.max_hp
+	enemy.base_speed = def.speed
+	enemy.armor_type = def.armor_type
+	enemy.bounty = def.bounty
+	enemy.leak_damage = maxi(def.leak_damage, 0)
+	enemy.position = waypoints[0]
+	enemy.path_index = 1
+
+	enemies.append(enemy)
+	_enemy_by_id[enemy.id] = enemy
+	_emit(Types.Event.ENEMY_SPAWNED, {
+		"enemy_id": enemy.id,
+		"def_id": enemy.def_id,
+		"position": enemy.position,
+		"max_hp": enemy.max_hp,
+	})
+
+
+func _step_enemies(delta: float) -> void:
+	for enemy in enemies:
+		if not enemy.alive or enemy.reached_goal:
+			continue
+		enemy.tick_status()
+		var remaining: float = enemy.current_speed() * delta
+		while remaining > 0.0 and enemy.path_index < waypoints.size():
+			var target: Vector3 = waypoints[enemy.path_index]
+			var to_target: Vector3 = target - enemy.position
+			var distance: float = to_target.length()
+			if distance <= remaining:
+				enemy.position = target
+				enemy.distance_travelled += distance
+				remaining -= distance
+				enemy.path_index += 1
+			else:
+				enemy.position += to_target / distance * remaining
+				enemy.distance_travelled += remaining
+				remaining = 0.0
+
+		if enemy.path_index >= waypoints.size():
+			enemy.reached_goal = true
+			var lost: int = economy.lose_lives(enemy.leak_damage)
+			_emit(Types.Event.ENEMY_LEAKED, {"enemy_id": enemy.id, "lives_lost": lost})
+			_emit(Types.Event.LIVES_CHANGED, {"lives": economy.lives})
+
+
+func _step_towers(_delta: float) -> void:
+	for tower in towers:
+		tower.tick_cooldown()
+		if not tower.is_ready():
+			continue
+		var target = TargetingScript.select(tower, enemies)
+		if target == null:
+			continue
+
+		tower.facing = atan2(target.position.x - tower.position.x, target.position.z - tower.position.z)
+		tower.start_cooldown()
+		_emit(Types.Event.TOWER_FIRED, {
+			"tower_id": tower.id,
+			"target_id": target.id,
+			"facing": tower.facing,
+			"fire_mode": tower.fire_mode,
+			"origin": tower.position,
+			"target_position": target.position,
+		})
+
+		if tower.fire_mode == Types.FireMode.HITSCAN:
+			_apply_payload(tower, target, target.position, tower.damage, tower.damage_type,
+				tower.splash_radius, tower.slow_percent, tower.slow_ticks)
+		else:
+			_spawn_projectile(tower, target)
+
+
+func _spawn_projectile(tower, target) -> void:
+	var projectile = ProjectileScript.new()
+	projectile.id = _next_projectile_id
+	_next_projectile_id += 1
+	projectile.owner_tower_id = tower.id
+	projectile.target_enemy_id = target.id
+	projectile.position = tower.position + Vector3(0.0, 1.0, 0.0)
+	projectile.target_position = target.position
+	projectile.speed = maxf(tower.projectile_speed, 1.0)
+	projectile.damage = tower.damage
+	projectile.damage_type = tower.damage_type
+	projectile.splash_radius = tower.splash_radius
+	projectile.slow_percent = tower.slow_percent
+	projectile.slow_ticks = tower.slow_ticks
+	projectiles.append(projectile)
+	_emit(Types.Event.PROJECTILE_SPAWNED, {
+		"projectile_id": projectile.id,
+		"tower_id": tower.id,
+		"position": projectile.position,
+		"speed": projectile.speed,
+	})
+
+
+func _step_projectiles(delta: float) -> void:
+	for projectile in projectiles:
+		if not projectile.alive:
+			continue
+		projectile.ticks_left -= 1
+		if projectile.ticks_left <= 0:
+			projectile.alive = false
+			# The view frees its node on this event. Without it the mesh is
+			# orphaned: still parented, never updated, never released.
+			_emit(Types.Event.PROJECTILE_EXPIRED, {
+				"projectile_id": projectile.id,
+				"position": projectile.position,
+			})
+			continue
+
+		var destination: Vector3 = projectile.target_position
+		var target = _enemy_by_id.get(projectile.target_enemy_id, null)
+		if target != null and target.alive and not target.reached_goal:
+			destination = target.position
+		else:
+			target = null
+
+		if projectile.step_towards(destination, delta):
+			projectile.alive = false
+			_emit(Types.Event.PROJECTILE_HIT, {
+				"projectile_id": projectile.id,
+				"position": projectile.position,
+				"splash_radius": projectile.splash_radius,
+			})
+			var owner = _tower_by_id(projectile.owner_tower_id)
+			_apply_payload(owner, target, projectile.position, projectile.damage,
+				projectile.damage_type, projectile.splash_radius,
+				projectile.slow_percent, projectile.slow_ticks)
+
+
+## Single place where damage lands, for both hitscan and projectile hits.
+## `primary` may be null when a projectile's target died mid-flight; splash still applies.
+##
+## Armour and splash falloff are resolved here rather than in `_damage_enemy` so
+## that a splash hit divides once (see DamageTable.compute_splash) instead of
+## truncating twice on its way to the enemy.
+func _apply_payload(source_tower, primary, impact: Vector3, damage: int, damage_type: int,
+		splash_radius: float, slow_percent: int, slow_ticks: int) -> void:
+	if splash_radius > 0.0:
+		for enemy in TargetingScript.in_radius(enemies, impact, splash_radius):
+			var offset: Vector3 = enemy.position - impact
+			var distance: float = sqrt(offset.x * offset.x + offset.z * offset.z)
+			var falloff: int = DamageScript.splash_percent_at(distance, splash_radius)
+			var final_damage: int = DamageScript.compute_splash(
+				damage, damage_type, enemy.armor_type, falloff)
+			_damage_enemy(source_tower, enemy, final_damage, slow_percent, slow_ticks)
+	elif primary != null:
+		_damage_enemy(source_tower, primary,
+			DamageScript.compute(damage, damage_type, primary.armor_type),
+			slow_percent, slow_ticks)
+
+
+## `final_damage` has already been through the armour table. Callers resolve the
+## matchup; this function only applies the result.
+func _damage_enemy(source_tower, enemy, final_damage: int,
+		slow_percent: int, slow_ticks: int) -> void:
+	if enemy == null or not enemy.alive or enemy.reached_goal or final_damage <= 0:
+		return
+	var dealt: int = enemy.take_damage(final_damage)
+	if slow_percent > 0 and slow_ticks > 0:
+		enemy.apply_slow(slow_percent, slow_ticks)
+
+	if source_tower != null:
+		source_tower.damage_dealt += dealt
+	_emit(Types.Event.ENEMY_DAMAGED, {
+		"enemy_id": enemy.id,
+		"amount": dealt,
+		"hp": enemy.hp,
+		"max_hp": enemy.max_hp,
+		"position": enemy.position,
+	})
+
+	if not enemy.alive:
+		economy.earn(enemy.bounty)
+		if source_tower != null:
+			source_tower.kills += 1
+		_emit(Types.Event.ENEMY_KILLED, {
+			"enemy_id": enemy.id,
+			"def_id": enemy.def_id,
+			"bounty": enemy.bounty,
+			"position": enemy.position,
+			"killer_tower_id": source_tower.id if source_tower != null else 0,
+		})
+		_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
+
+
+func _compact_entities() -> void:
+	var live_enemies: Array = []
+	for enemy in enemies:
+		if enemy.alive and not enemy.reached_goal:
+			live_enemies.append(enemy)
+		else:
+			_enemy_by_id.erase(enemy.id)
+	enemies = live_enemies
+
+	var live_projectiles: Array = []
+	for projectile in projectiles:
+		if projectile.alive:
+			live_projectiles.append(projectile)
+	projectiles = live_projectiles
+
+
+## Nothing will advance again once the match ends, so a shot still in the air is
+## stranded: its fuse never ticks down and the view never hears it land. Retire
+## the lot explicitly rather than leaving meshes hanging over the results screen.
+func _retire_projectiles() -> void:
+	for projectile in projectiles:
+		if not projectile.alive:
+			continue
+		projectile.alive = false
+		_emit(Types.Event.PROJECTILE_EXPIRED, {
+			"projectile_id": projectile.id,
+			"position": projectile.position,
+		})
+	projectiles = []
+
+
+func _resolve_phase() -> void:
+	if economy.is_defeated():
+		phase = Types.Phase.LOST
+		_retire_projectiles()
+		_emit(Types.Event.GAME_LOST, {"tick": tick, "wave_index": wave_director.wave_index})
+		return
+
+	if phase != Types.Phase.COMBAT:
+		return
+	if not wave_director.spawning_finished() or not enemies.is_empty():
+		return
+
+	economy.earn(WAVE_CLEAR_BONUS)
+	_emit(Types.Event.WAVE_CLEARED, {"wave_index": wave_director.wave_index, "bonus": WAVE_CLEAR_BONUS})
+	_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
+
+	if wave_director.has_next_wave():
+		phase = Types.Phase.BUILD
+	else:
+		phase = Types.Phase.WON
+		_retire_projectiles()
+		_emit(Types.Event.GAME_WON, {"tick": tick, "lives_left": economy.lives})
+
+
+# ---------------------------------------------------------------------------
+# Events and introspection
+# ---------------------------------------------------------------------------
+
+func _emit(event_type: int, data: Dictionary) -> void:
+	data["type"] = event_type
+	data["tick"] = tick
+	events.append(data)
+
+
+## Hands the queue to the caller and clears it. Call once per rendered frame.
+func drain_events() -> Array[Dictionary]:
+	var out: Array[Dictionary] = events
+	events = []
+	return out
+
+
+func _tower_by_id(id: int):
+	for tower in towers:
+		if tower.id == id:
+			return tower
+	return null
+
+
+## Cheap order-sensitive checksum of the whole simulation.
+## Two runs with the same seed and the same commands must produce the same value
+## at every tick. `tests/cases/test_determinism.gd` enforces exactly that.
+func snapshot_hash() -> int:
+	var h: int = 1469598103
+	h = _mix(h, tick)
+	h = _mix(h, phase)
+	h = _mix(h, economy.credits)
+	h = _mix(h, economy.lives)
+	h = _mix(h, rng.get_state())
+	h = _mix(h, wave_director.wave_index)
+	h = _mix(h, enemies.size())
+	h = _mix(h, projectiles.size())
+	for enemy in enemies:
+		h = _mix(h, enemy.id)
+		h = _mix(h, enemy.hp)
+		h = _mix(h, int(round(enemy.distance_travelled * 1000.0)))
+	for tower in towers:
+		h = _mix(h, tower.id)
+		h = _mix(h, tower.cooldown_ticks)
+		h = _mix(h, tower.damage_dealt)
+	for projectile in projectiles:
+		h = _mix(h, projectile.id)
+		h = _mix(h, int(round(projectile.position.x * 1000.0)))
+		h = _mix(h, int(round(projectile.position.z * 1000.0)))
+	return h
+
+
+static func _mix(h: int, value: int) -> int:
+	var mixed: int = (h ^ value) & 0xFFFFFFFF
+	return (mixed * 16777619) & 0xFFFFFFFF

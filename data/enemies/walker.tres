@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/enemy_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "walker"
+display_name = "Line Walker"
+description = "The baseline. Medium armour, no strengths, no weaknesses."
+max_hp = 1700
+speed = 4.5
+armor_type = 1
+bounty = 14
+leak_damage = 1
+mesh_path = "res://data/models/enemies/walker.glb"
+mesh_scale = 1.0
+shell_node = ""
+body_color = Color(0.8, 0.35, 0.4, 1)
+radius = 0.45
+height = 1.3

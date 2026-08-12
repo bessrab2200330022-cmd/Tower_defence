@@ -1,0 +1,31 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 16
+start_delay_ticks = 0
+interval_ticks = 22
+
+[sub_resource type="Resource" id="Group_shielded"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 6
+start_delay_ticks = 180
+interval_ticks = 60
+
+[sub_resource type="Resource" id="Group_brutes"]
+script = ExtResource("2_group")
+enemy_id = "brute"
+count = 3
+start_delay_ticks = 300
+interval_ticks = 150
+
+[resource]
+script = ExtResource("1_wave")
+id = "wave_05"
+display_name = "Breakthrough"
+groups = [SubResource("Group_drones"), SubResource("Group_shielded"), SubResource("Group_brutes")]

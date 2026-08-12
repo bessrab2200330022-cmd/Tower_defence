@@ -1,0 +1,26 @@
+# Godot 4 import cache and per-machine state
+.godot/
+/android/
+
+# Build output
+build/
+export/
+*.pck
+*.zip
+*.exe
+*.x86_64
+*.dmg
+*.app
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Tooling
+/tools/godot-bin/
+
+# Per-machine path to the Godot executable, cached by scripts/find_godot.ps1
+scripts/godot_path.txt
