@@ -43,11 +43,13 @@ import studio  # noqa: E402
 OUTPUT_PATH = "data/models/enemies/mender.glb"
 
 RADIUS = 0.50
-# The Mender must stand clear of the Walker column it hides in. The Walker's
-# def says 1.3 (its model only reaches 1.173 - see the F3 finding), so 1.43
-# keeps a visible head of clearance even after the Walker is corrected, while
-# staying under the Warden's 1.55 so the two supports do not trade places.
-HEIGHT = 1.43
+# The Mender must stand clear of the Walker column it hides in, and sit below
+# the Warden so the two support machines do not trade places. Measured ladder:
+#   Walker 1.30 (def; its model is short - F3) < Mender 1.38 < Warden 1.46
+#   < Brute 1.564.
+# Even steps of roughly 0.08, which is about the smallest height difference
+# that survives the RTS camera. Below that, separate them by shape instead.
+HEIGHT = 1.38
 
 
 def build():
@@ -121,7 +123,7 @@ def build():
     # faceted and does not drift into the towers' machined-cylinder language.
     dish = studio.cylinder(
         "Dish", radius_bottom=0.24, radius_top=0.46, height=0.16, segments=8,
-        parent=root, location=(0.0, 0.02, 1.12), material=shell,
+        parent=root, location=(0.0, 0.02, 1.07), material=shell,
     )
     studio.bevel(dish, width=0.014)
 
@@ -129,7 +131,7 @@ def build():
     # find when a heal fires.
     studio.sphere(
         "Core", radius=0.2, subdivisions=1,
-        parent=root, location=(0.0, 0.02, 1.3), material=glow,
+        parent=root, location=(0.0, 0.02, 1.25), material=glow,
         scale=(1.0, 1.0, 0.62),
     )
 
@@ -140,7 +142,7 @@ def build():
         studio.box(
             "Post%d" % (index + 1), size=(0.06, 0.06, 0.2),
             parent=root,
-            location=(math.cos(radians) * 0.38, 0.02 + math.sin(radians) * 0.38, 1.33),
+            location=(math.cos(radians) * 0.38, 0.02 + math.sin(radians) * 0.38, 1.28),
             material=dark,
         )
 

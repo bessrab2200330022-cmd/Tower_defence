@@ -42,10 +42,16 @@ import studio  # noqa: E402
 OUTPUT_PATH = "data/models/enemies/warden.glb"
 
 RADIUS = 0.52
-HEIGHT = 1.55
+# 1.46, not the 1.55 this was first built at. At 1.55 the field globe topped
+# out at 1.556 against the Brute's measured 1.564 - a tie, and WORKSTREAMS
+# names "the Brute must be visibly the tallest thing on the board" as one of
+# the two things in this project that cannot be written down. 1.46 leaves the
+# Brute a clear head while the Warden still stands 0.37 over the Shielded
+# Scouts it escorts, which is the number the Phalanx lesson actually needs.
+HEIGHT = 1.46
 
-MAST_TOP = 1.23
-HEAD_Z = 1.30
+MAST_TOP = 1.135
+HEAD_Z = 1.205
 
 
 def build():
