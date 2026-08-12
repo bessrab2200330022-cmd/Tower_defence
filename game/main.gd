@@ -1,42 +1,99 @@
 extends Node3D
-## Entry point. Owns the fixed-timestep loop and wires sim <-> view <-> HUD.
+## Entry point and application shell. Owns the menu, the fixed-timestep loop, and
+## the lifetime of a match.
 ##
 ## Deliberately the ONLY place that advances simulation time. If you find
 ## yourself calling `Simulation.step()` anywhere else, stop and reconsider.
+##
+## Until this round it booted straight into `catalog.first_map()`. There are two
+## maps; the second had no door. A match is now something that gets started with
+## a chosen map id and torn down again, which is the whole of the change - the
+## loop below is untouched.
 
 const Types := preload("res://sim/sim_types.gd")
 const SimulationScript := preload("res://sim/simulation.gd")
 const CatalogScript := preload("res://data/catalog.gd")
 const LevelScript := preload("res://game/level.gd")
 const HudScript := preload("res://game/ui/hud.gd")
+const MainMenuScript := preload("res://game/ui/main_menu.gd")
+const InputActions := preload("res://game/input_actions.gd")
+const AppSettings := preload("res://game/app_settings.gd")
 
 ## Guard against the spiral of death after a stall or a breakpoint.
 const MAX_TICKS_PER_FRAME: int = 8
+
+## Every match uses this seed. Replays and the balance harness both key off it,
+## and a wall-clock seed would make a reported bug unreproducible.
+const MATCH_SEED: int = 20260810
 
 var catalog
 var sim
 var level: Node3D
 var hud: CanvasLayer
+var menu: CanvasLayer
 
 var _accumulator: float = 0.0
 var speed_multiplier: float = 1.0
 var paused: bool = false
+var _current_map_id: String = ""
 
 
 func _ready() -> void:
+	# Before anything can read an action. Also installs any saved rebinds.
+	AppSettings.ensure_loaded()
+
 	catalog = CatalogScript.load_default()
 	var problems: PackedStringArray = catalog.validate()
 	for problem in problems:
 		push_error("Content validation: %s" % problem)
 
-	var map_def = catalog.first_map()
+	menu = MainMenuScript.new()
+	menu.name = "MainMenu"
+	add_child(menu)
+	menu.build(catalog)
+	menu.map_chosen.connect(start_match)
+	menu.quit_pressed.connect(func() -> void: get_tree().quit())
+	menu.open()
+
+	# `--map=<id>` boots straight past the menu. This exists for the headless
+	# boot check: `--quit-after 600` with no arguments now lands on the title
+	# screen, so without a way through it the smoke run stops proving that a
+	# board, a sim and a HUD can be built at all. See the report - the gate
+	# itself lives in scripts/, which is not this agent's to edit.
+	var requested: String = _requested_map_id()
+	if requested != "":
+		start_match(requested)
+
+
+## Reads `--map=<id>` or `--map <id>` from the arguments after `--`.
+static func _requested_map_id() -> String:
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	for index in args.size():
+		var arg: String = args[index]
+		if arg.begins_with("--map="):
+			return arg.substr(6)
+		if arg == "--map" and index + 1 < args.size():
+			return args[index + 1]
+	return ""
+
+
+# ---------------------------------------------------------------------------
+# Match lifetime
+# ---------------------------------------------------------------------------
+
+func start_match(map_id: String) -> void:
+	var map_def = catalog.get_map(map_id)
 	if map_def == null:
-		push_error("No maps found in res://data/maps. Cannot start.")
+		push_error("No map '%s' in res://data/maps." % map_id)
 		return
 
+	end_match()
+	_current_map_id = map_id
+
 	sim = SimulationScript.new()
-	if not sim.setup(map_def, catalog, 20260810):
+	if not sim.setup(map_def, catalog, MATCH_SEED):
 		push_error("Simulation setup failed: %s" % sim.setup_error)
+		sim = null
 		return
 
 	level = LevelScript.new()
@@ -54,10 +111,48 @@ func _ready() -> void:
 	hud.speed_changed.connect(_on_speed_changed)
 	hud.upgrade_requested.connect(_on_upgrade_requested)
 	hud.tower_sell_requested.connect(_on_sell_requested)
+	hud.resume_pressed.connect(func() -> void: set_paused(false))
+	hud.restart_pressed.connect(func() -> void: start_match(_current_map_id))
+	hud.quit_to_menu_pressed.connect(quit_to_menu)
 
 	level.build_requested.connect(_on_build_requested)
 	level.sell_requested.connect(_on_sell_requested)
 	level.tower_inspected.connect(_on_tower_inspected)
+
+	_accumulator = 0.0
+	speed_multiplier = 1.0
+	set_paused(false)
+	menu.close()
+
+
+## Frees the match outright rather than hiding it. A Level holds a board, a
+## lighting rig and every view node in play; leaving one parked behind the menu
+## while another is built is how a second match runs at half the frame rate.
+func end_match() -> void:
+	if hud != null:
+		hud.queue_free()
+		hud = null
+	if level != null:
+		level.queue_free()
+		level = null
+	sim = null
+
+
+func quit_to_menu() -> void:
+	end_match()
+	_current_map_id = ""
+	paused = false
+	menu.open()
+
+
+func set_paused(value: bool) -> void:
+	paused = value
+	if hud == null:
+		return
+	if value:
+		hud.open_pause_menu()
+	else:
+		hud.close_pause_menu()
 
 
 func _process(delta: float) -> void:
@@ -157,22 +252,48 @@ func _on_upgrade_requested(tower_id: int, def_id: String) -> void:
 	level.play_denied()
 
 
+## Every binding goes through the InputMap now - see game/input_actions.gd for
+## why the actions are registered in code. The raw `match event.keycode` this
+## replaced was twelve keys that could not be rebound and were written down
+## nowhere.
 func _unhandled_input(event: InputEvent) -> void:
-	if sim == null or level == null or hud == null:
+	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_SPACE:
-				sim.start_next_wave()
-			KEY_ESCAPE:
-				level.set_ghost_tower("")
-				level.set_sell_mode(false)
-				level.clear_selection()
-				hud.clear_selection()
-			KEY_1, KEY_2, KEY_3, KEY_4:
-				var index: int = event.keycode - KEY_1
+
+	if sim == null:
+		# On the menu. Escape backs out a page; the menu says whether it used it.
+		if event.is_action_pressed("bl_cancel"):
+			menu.back()
+		return
+
+	if event.is_action_pressed("bl_pause"):
+		set_paused(not paused)
+		return
+
+	if event.is_action_pressed("bl_cancel"):
+		# Escape unwinds one layer at a time: settings, then pause, then the
+		# current selection. Doing all three at once means a player who opened
+		# settings by accident loses their tower selection closing it.
+		if hud.pause_settings_open():
+			hud.open_pause_menu()
+		elif paused:
+			set_paused(false)
+		else:
+			level.set_ghost_tower("")
+			level.set_sell_mode(false)
+			level.clear_selection()
+			hud.clear_selection()
+		return
+
+	if paused:
+		return
+
+	if event.is_action_pressed("bl_start_wave"):
+		sim.start_next_wave()
+	elif event.is_action_pressed("bl_sell_mode"):
+		hud.toggle_sell_mode()
+	else:
+		for index in 4:
+			if event.is_action_pressed("bl_tower_%d" % (index + 1)):
 				hud.select_tower_by_index(index)
-			KEY_X:
-				hud.toggle_sell_mode()
-			KEY_P:
-				paused = not paused
+				return

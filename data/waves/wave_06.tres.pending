@@ -1,0 +1,31 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 16
+start_delay_ticks = 0
+interval_ticks = 14
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 8
+start_delay_ticks = 240
+interval_ticks = 50
+
+[sub_resource type="Resource" id="Group_skiffs"]
+script = ExtResource("2_group")
+enemy_id = "skiff"
+count = 7
+start_delay_ticks = 500
+interval_ticks = 75
+
+[resource]
+script = ExtResource("1_wave")
+id = "wave_06"
+display_name = "Skyfall"
+groups = [SubResource("Group_drones"), SubResource("Group_walkers"), SubResource("Group_skiffs")]

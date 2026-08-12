@@ -71,7 +71,9 @@ def build():
         target=((len(ROSTER) - 1) * SPACING * 0.5, 0.0, 0.6),
         distance=len(ROSTER) * SPACING * 1.15,
         azimuth_deg=0.0,
-        elevation_deg=24.0,
+        # studio.RTS_ELEVATION_DEG, not the 24 this used to pass - see the note
+        # on preview_viewport. 52 is what game/rts_camera.gd actually uses.
+        elevation_deg=studio.RTS_ELEVATION_DEG,
     )
     print("roster preview: %d of %d models" % (placed, len(ROSTER)))
     return ground

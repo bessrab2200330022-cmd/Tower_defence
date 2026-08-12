@@ -1,0 +1,38 @@
+[gd_resource type="Resource" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_coursers"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 8
+start_delay_ticks = 0
+interval_ticks = 24
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 16
+start_delay_ticks = 200
+interval_ticks = 12
+
+[sub_resource type="Resource" id="Group_coursers_2"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 8
+start_delay_ticks = 460
+interval_ticks = 12
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 6
+start_delay_ticks = 620
+interval_ticks = 50
+
+[resource]
+script = ExtResource("1_wave")
+id = "wave_07"
+display_name = "Stampede"
+groups = [SubResource("Group_coursers"), SubResource("Group_drones"), SubResource("Group_coursers_2"), SubResource("Group_walkers")]

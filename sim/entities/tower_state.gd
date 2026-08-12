@@ -18,6 +18,9 @@ var splash_radius: float = 0.0
 var slow_percent: int = 0
 var slow_ticks: int = 0
 var target_mode: int = 0
+## False for every Frost Mortar tier. Fliers are invisible to such a tower:
+## it will not select one, and its splash will not touch one.
+var can_target_air: bool = true
 
 var credits_invested: int = 0
 var kills: int = 0

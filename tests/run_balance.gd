@@ -27,6 +27,8 @@ const Types := preload("res://sim/sim_types.gd")
 const SimulationScript := preload("res://sim/simulation.gd")
 const CatalogScript := preload("res://data/catalog.gd")
 const DamageScript := preload("res://sim/damage.gd")
+const WaveDefScript := preload("res://data/schemas/wave_def.gd")
+const SpawnGroupScript := preload("res://data/schemas/spawn_group.gd")
 
 ## A match that has not resolved by here is stalled, not slow. The shipped
 ## campaign resolves in ~6k.
@@ -46,6 +48,12 @@ func _initialize() -> void:
 	var maps: Array = _maps_to_run(options)
 	if maps.is_empty():
 		_problems.append("no maps matched %s" % str(options.get("map", "*")))
+		_report_problems()
+		return
+
+	if options.has("roster"):
+		for map_def in maps:
+			_run_roster(map_def)
 		_report_problems()
 		return
 
@@ -963,6 +971,8 @@ func _parse_args() -> Dictionary:
 			# Bare flags.
 			if arg == "--gates":
 				options["gates"] = true
+			elif arg == "--roster":
+				options["roster"] = true
 			continue
 		var parts: PackedStringArray = arg.substr(2).split("=", true, 1)
 		var key: String = parts[0]
@@ -1007,3 +1017,203 @@ func _override_map(map_def, starting_credits: int, bonus: int) -> Dictionary:
 func _restore_map(map_def, previous: Dictionary) -> void:
 	map_def.starting_credits = int(previous["credits"])
 	map_def.wave_clear_bonus = int(previous["bonus"])
+
+
+# ---------------------------------------------------------------------------
+# Roster mode: measure every enemy, and measure fliers separately
+# ---------------------------------------------------------------------------
+#
+# enemies.md 2 is explicit that air HP must be tuned against CHORD exposure, not
+# path exposure: on The Crossing a Skiff's spawn-goal chord is a third of the
+# walkers' tour, so the same hit points are on the board for a third of the time
+# and its per-second threat density is far higher than the number suggests.
+# Reporting fliers in the same column as walkers hides exactly that.
+#
+# The wave used here is built in memory rather than added to data/waves, because
+# the shipped wave lists belong to another agent this round.
+
+func _run_roster(map_def) -> void:
+	print("")
+	print("=== ROSTER: %s ===" % map_def.id)
+
+	var sim = SimulationScript.new()
+	if not sim.setup(map_def, _catalog, 1):
+		_problems.append("roster setup failed: %s" % sim.setup_error)
+		return
+
+	var walked: float = 0.0
+	for i in range(1, sim.waypoints.size()):
+		walked += sim.waypoints[i - 1].distance_to(sim.waypoints[i])
+	var chord: float = sim.air_waypoints[0].distance_to(sim.air_waypoints[1])
+
+	print("")
+	print("  route: %.1f units walked, %.1f units flown (%.0f%% of the walk)"
+		% [walked, chord, 100.0 * chord / maxf(walked, 0.001)])
+	print("")
+	print("  enemy             lane      hp  speed  transit s   hp/s on board   ability")
+	for enemy_id in _sorted_keys(_catalog.enemies):
+		var def = _catalog.get_enemy(enemy_id)
+		var length: float = chord if def.flies else walked
+		var transit: float = length / maxf(def.speed, 0.01)
+		print("    %-16s %-5s %6d %6.1f %10.1f %15.1f   %s"
+			% [enemy_id, "AIR" if def.flies else "ground", def.max_hp, def.speed,
+				transit, float(def.max_hp) / maxf(transit, 0.001), _ability_name(def)])
+
+	_roster_match(map_def)
+
+
+func _ability_name(def) -> String:
+	match def.ability:
+		Types.Ability.AURA:
+			return "aura %d%% within %.1f" % [def.ability_percent, def.ability_radius]
+		Types.Ability.HEAL_PULSE:
+			return "heal %d every %dt within %.1f" % [def.ability_amount, def.ability_interval, def.ability_radius]
+		Types.Ability.SPLIT_ON_DEATH:
+			return "splits into %s" % ", ".join(def.spawn_on_death)
+	return ""
+
+
+## One match against a synthetic wave carrying every enemy in the catalog, so
+## each new ability actually executes under the harness rather than only under
+## unit tests.
+func _roster_match(map_def) -> void:
+	var groups: Array = []
+	var delay: int = 1
+	for enemy_id in _sorted_keys(_catalog.enemies):
+		var def = _catalog.get_enemy(enemy_id)
+		# fission_spawn arrives only by splitting; putting it in a group would
+		# measure something the player never meets.
+		if str(enemy_id) == "fission_spawn":
+			continue
+		var group = SpawnGroupScript.new()
+		group.enemy_id = str(enemy_id)
+		group.count = 4
+		group.start_delay_ticks = delay
+		group.interval_ticks = 45
+		groups.append(group)
+		delay += 90
+
+	var wave = WaveDefScript.new()
+	wave.id = "harness_roster"
+	wave.display_name = "Roster"
+	wave.groups = groups
+	_catalog.waves[wave.id] = wave
+
+	var previous_waves: PackedStringArray = map_def.wave_ids
+	var previous_credits: int = map_def.starting_credits
+	map_def.wave_ids = PackedStringArray(["harness_roster"])
+	# Deliberately over-funded. This wave is four of EVERY enemy at once, which
+	# is far past anything the campaign ships; on the map economy the board is
+	# simply overrun and no Crawler ever dies, so the split path never executes
+	# and the instrument measures nothing. The point here is exercising every
+	# ability, not judging difficulty.
+	map_def.starting_credits = 4000
+
+	var sim = SimulationScript.new()
+	if not sim.setup(map_def, _catalog, 1):
+		_problems.append("roster match setup failed: %s" % sim.setup_error)
+		map_def.wave_ids = previous_waves
+		return
+
+	# Cover the route with the best mix the gates found, so the numbers below
+	# describe the enemies rather than an empty board.
+	var cells: Array = _cells_for(sim, "coverage")
+	var built: int = 0
+	for cell in cells:
+		if built >= 24:
+			break
+		var wanted: String = ["arc_cannon", "plasma_lance", "frost_mortar"][built % 3]
+		if sim.try_build(cell, wanted):
+			built += 1
+
+	_report_lane_coverage(sim)
+
+	var killed: Dictionary = {}
+	var leaked: Dictionary = {}
+	var healed_total: int = 0
+	var heal_events: int = 0
+	var splits: int = 0
+	var aura_events: int = 0
+	var ticks: int = 0
+	sim.start_next_wave()
+	while not sim.is_over() and ticks < MAX_TICKS:
+		sim.step()
+		ticks += 1
+		for event in sim.drain_events():
+			var kind: int = int(event["type"])
+			if kind == Types.Event.ENEMY_KILLED:
+				killed[str(event["def_id"])] = int(killed.get(str(event["def_id"]), 0)) + 1
+			elif kind == Types.Event.ENEMY_LEAKED:
+				leaked[str(event["def_id"])] = int(leaked.get(str(event["def_id"]), 0)) + 1
+			elif kind == Types.Event.ENEMY_HEALED:
+				healed_total += int(event["amount"])
+				heal_events += 1
+			elif kind == Types.Event.ENEMY_SPLIT:
+				splits += 1
+			elif kind == Types.Event.AURA_APPLIED:
+				aura_events += 1
+
+	print("")
+	print("  synthetic wave, %d towers, resolved in %d ticks: %s, %d lives left"
+		% [built, ticks, "Victory" if sim.phase == Types.Phase.WON else "Defeat", sim.economy.lives])
+	print("")
+	print("  enemy             killed  leaked")
+	for enemy_id in _sorted_keys(_catalog.enemies):
+		print("    %-16s %6d %7d"
+			% [enemy_id, int(killed.get(str(enemy_id), 0)), int(leaked.get(str(enemy_id), 0))])
+	print("")
+	print("  abilities fired: %d heal pulses restoring %d hp, %d splits, %d aura transitions"
+		% [heal_events, healed_total, splits, aura_events])
+
+	var runs: Array = []
+	var damage: Dictionary = {}
+	var invested: Dictionary = {}
+	var tower_counts: Dictionary = {}
+	for tower in sim.towers:
+		damage[tower.def_id] = int(damage.get(tower.def_id, 0)) + tower.damage_dealt
+		invested[tower.def_id] = int(invested.get(tower.def_id, 0)) + tower.credits_invested
+		tower_counts[tower.def_id] = int(tower_counts.get(tower.def_id, 0)) + 1
+	runs.append({"damage": damage, "invested": invested, "tower_counts": tower_counts})
+	_report_damage(runs)
+
+	map_def.wave_ids = previous_waves
+	map_def.starting_credits = previous_credits
+	_catalog.waves.erase("harness_roster")
+
+
+## Ground pads are chosen to cover the ROUTE. The air chord is a different line
+## across the same board, and only air-capable towers count toward it - so a
+## board that looks well defended can be wide open to fliers. This is the number
+## that says whether a Skiff was answered or simply unanswerable.
+func _report_lane_coverage(sim) -> void:
+	var ground: int = 0
+	for waypoint in sim.waypoints:
+		for tower in sim.towers:
+			var d: Vector3 = waypoint - tower.position
+			if d.x * d.x + d.z * d.z <= tower.range_squared():
+				ground += 1
+				break
+
+	# The chord has only two waypoints, so it is sampled evenly instead.
+	var samples: int = 60
+	var air: int = 0
+	var air_towers: int = 0
+	for tower in sim.towers:
+		if tower.can_target_air:
+			air_towers += 1
+	for i in samples:
+		var at: Vector3 = sim.air_waypoints[0].lerp(
+			sim.air_waypoints[1], float(i) / float(samples - 1))
+		for tower in sim.towers:
+			if not tower.can_target_air:
+				continue
+			var d: Vector3 = at - tower.position
+			if d.x * d.x + d.z * d.z <= tower.range_squared():
+				air += 1
+				break
+
+	print("")
+	print("  lane coverage: ground %d/%d (%.0f%%) by %d towers, air %d/%d (%.0f%%) by %d air-capable"
+		% [ground, sim.waypoints.size(),
+			100.0 * float(ground) / float(maxi(sim.waypoints.size(), 1)),
+			sim.towers.size(), air, samples, 100.0 * float(air) / float(samples), air_towers])

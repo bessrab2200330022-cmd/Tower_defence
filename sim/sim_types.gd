@@ -33,6 +33,22 @@ enum FireMode {
 	PROJECTILE = 1, ## Spawns a travelling projectile.
 }
 
+## One ability per enemy, selected from data. Adding the fifth ability is a new
+## value here plus a branch in Simulation - never a subclass. See ROADMAP 2.6.
+enum Ability {
+	NONE = 0,
+	AURA = 1,            ## Protects nearby allies: they take ability_percent of computed damage.
+	HEAL_PULSE = 2,      ## Restores ability_amount to nearby allies every ability_interval ticks.
+	SPLIT_ON_DEATH = 3,  ## Spawns spawn_on_death at this enemy's exact path progress when killed.
+}
+
+## Height fliers cruise at. Above the tallest tower silhouette in the game
+## (Prime Focus, 2.62) so a Skiff visibly clears the board rather than appearing
+## to clip through it. Targeting measures distance on the XZ plane only, so this
+## is a presentation and health-bar number, not a balance one - which is exactly
+## why it is a named constant the view layer can read rather than a literal.
+const AIR_CRUISE_HEIGHT: float = 3.0
+
 ## Emitted by Simulation and drained by the presentation layer each frame.
 ## The sim never touches nodes; the view never mutates sim state.
 enum Event {
@@ -62,6 +78,16 @@ enum Event {
 	## cannot catch a missing consumer - an unconsumed upgrade is a tier-3 tower
 	## still wearing its tier-1 mesh, and only a human will notice.
 	TOWER_UPGRADED = 17,
+	## A Mender pulse restored hit points. The view draws the ring and the glow;
+	## a healed enemy whose health bar does not move reads as a bug.
+	ENEMY_HEALED = 18,
+	## A SPLIT_ON_DEATH enemy died and released its children. Emitted after the
+	## parent's ENEMY_KILLED and after each child's ENEMY_SPAWNED, so a consumer
+	## reading it already knows every id it names.
+	ENEMY_SPLIT = 19,
+	## An enemy is inside an aura this tick. Recomputed every tick, so the view
+	## should treat it as level-triggered state, not a one-shot.
+	AURA_APPLIED = 20,
 }
 
 enum Phase {

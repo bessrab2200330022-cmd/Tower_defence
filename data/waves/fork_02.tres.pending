@@ -1,0 +1,34 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 12
+start_delay_ticks = 0
+interval_ticks = 22
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_coursers"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 6
+start_delay_ticks = 300
+interval_ticks = 26
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 3
+start_delay_ticks = 420
+interval_ticks = 70
+route_hint = 1
+
+[resource]
+script = ExtResource("1_wave")
+id = "fork_02"
+display_name = "Braid"
+groups = [SubResource("Group_drones"), SubResource("Group_coursers"), SubResource("Group_walkers")]

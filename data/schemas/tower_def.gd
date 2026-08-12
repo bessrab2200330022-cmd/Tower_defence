@@ -47,6 +47,11 @@ extends Resource
 @export_range(0, 90, 1) var slow_percent: int = 0
 @export var slow_ticks: int = 0
 @export_enum("First", "Last", "Closest", "Strongest", "Weakest") var target_mode: int = 0
+## Whether this tower can shoot fliers. True for the Arc and Lance families at
+## every tier. FALSE FOR EVERY FROST MORTAR TIER, permanently: that hole is the
+## mortar family's declared price (upgrades.md 6) and the Skiff is what collects
+## it. A mortar tier that can hit air is a design change, not a tune.
+@export var can_target_air: bool = true
 
 @export_group("Presentation")
 ## Optional .glb built by art/towers/<id>.py. Leave empty to fall back to the

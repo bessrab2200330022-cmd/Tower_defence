@@ -54,6 +54,32 @@ static func compute_splash(base_damage: int, damage_type: int, armor_type: int,
 	return maxi(1, (base_damage * armour_pct * falloff_percent) / 10000)
 
 
+## Final integer damage with an aura folded in as a THIRD percentage in the same
+## single division: base x armour% x aura% / 10000.
+##
+## Applying the aura as its own division after the armour one truncates twice and
+## re-opens the wound the 10x rescale closed - a Warden would quietly grant more
+## than the 40% reduction it advertises, worst on exactly the small hits the
+## aura is supposed to matter least against. `aura_percent` is 100 when the
+## target is unprotected, which makes this identical to compute().
+static func compute_with_aura(base_damage: int, damage_type: int, armor_type: int,
+		aura_percent: int) -> int:
+	if base_damage <= 0:
+		return 0
+	var pct: int = multiplier_percent(damage_type, armor_type)
+	return maxi(1, (base_damage * pct * aura_percent) / 10000)
+
+
+## Splash, armour, falloff and aura in one division: the four-way version of
+## compute_splash. Same reasoning, one more percentage.
+static func compute_splash_with_aura(base_damage: int, damage_type: int, armor_type: int,
+		falloff_percent: int, aura_percent: int) -> int:
+	if base_damage <= 0 or falloff_percent <= 0:
+		return 0
+	var armour_pct: int = multiplier_percent(damage_type, armor_type)
+	return maxi(1, (base_damage * armour_pct * falloff_percent * aura_percent) / 1000000)
+
+
 ## Splash falloff, integer percent of full damage at the given distance.
 ## Full damage at the centre, linear falloff to 25% at the rim.
 static func splash_percent_at(distance: float, radius: float) -> int:

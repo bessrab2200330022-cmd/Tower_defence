@@ -1,0 +1,27 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/enemy_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "fission_spawn"
+display_name = "Fission Spawn"
+description = "Half a Crawler, running. Never arrives on its own - something bigger has to die first."
+max_hp = 450
+speed = 6.5
+armor_type = 0
+bounty = 4
+leak_damage = 1
+ability = 0
+ability_radius = 0.0
+ability_percent = 100
+ability_amount = 0
+ability_interval = 0
+spawn_on_death = PackedStringArray()
+flies = false
+mesh_path = ""
+mesh_scale = 1.0
+shell_node = ""
+body_color = Color(0.78, 0.7, 0.42, 1)
+radius = 0.4
+height = 0.7

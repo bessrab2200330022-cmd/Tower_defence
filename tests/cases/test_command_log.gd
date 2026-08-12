@@ -20,8 +20,9 @@ const TICKS: int = 400
 
 ## See the note above before touching these.
 ##
-## REGENERATED twice, each time `snapshot_hash()` widened: once for
-## `slow_percent`/`slow_ticks_left`, once for the tower's `def_id`. Both widen
+## REGENERATED three times, each time `snapshot_hash()` widened: for
+## `slow_percent`/`slow_ticks_left`, for the tower's `def_id`, and for
+## `aura_percent`/`ability_next_tick`. Each widens
 ## the fingerprint of every state without altering any state - the scripted
 ## match has ended on phase COMBAT with 48 lives, 280 credits, 2 towers and 9
 ## enemies alive through all three revisions, which is the check that says a
@@ -31,11 +32,11 @@ const TICKS: int = 400
 ##
 ## These pin behaviour from here on; they are no longer evidence about the
 ## original apply_command refactor. `_run(false)` vs `_run(true)` carries that.
-const GOLDEN_TICK_100: int = 3884201677
-const GOLDEN_TICK_200: int = 1232678415
-const GOLDEN_TICK_300: int = 3363014248
-const GOLDEN_TICK_400: int = 3901190868
-const GOLDEN_FOLD: int = 1639865123
+const GOLDEN_TICK_100: int = 939216219
+const GOLDEN_TICK_200: int = 1666505771
+const GOLDEN_TICK_300: int = 3210885404
+const GOLDEN_TICK_400: int = 2335257322
+const GOLDEN_FOLD: int = 1063462439
 
 ## One scripted match, expressed as the {tick, action, args} shape a saved
 ## command log will use. Exercises all four commands, including a sell of a

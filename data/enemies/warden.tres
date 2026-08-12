@@ -1,0 +1,27 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/enemy_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "warden"
+display_name = "Warden"
+description = "Projects a shield over everything around it. Massed fire into the pack does nothing until the shepherd falls."
+max_hp = 2600
+speed = 4.0
+armor_type = 3
+bounty = 40
+leak_damage = 1
+ability = 1
+ability_radius = 4.0
+ability_percent = 60
+ability_amount = 0
+ability_interval = 0
+spawn_on_death = PackedStringArray()
+flies = false
+mesh_path = "res://data/models/enemies/warden.glb"
+mesh_scale = 1.0
+shell_node = ""
+body_color = Color(0.42, 0.68, 0.85, 1)
+radius = 0.5
+height = 1.472

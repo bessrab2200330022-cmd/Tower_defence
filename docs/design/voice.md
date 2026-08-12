@@ -65,6 +65,8 @@ Existing four: shipped text stands. New six ([enemies.md](./enemies.md) stat blo
 | mender | **Mender** | A repair swarm in a hull, undoing your damage every other second. Focus it first, or fight the same walkers twice. |
 | fission_crawler | **Fission Crawler** | Comes apart on death into two sprinting spawn. Kill it early and the children walk your whole gauntlet; kill it late and they don't have to. |
 | fission_spawn | **Fission Spawn** | Half a crawler, twice the hurry. |
+| line_breaker / breaker_stride / breaker_core | **Line Breaker** *(all three phases share the name)* | The Reclamation's siegework. It sheds what you break and comes back faster — switch with it, or watch it walk. |
+| breaker_shard | **Breaker Shard** | What's left when the Breaker fails. Still moving. |
 
 ---
 
@@ -91,6 +93,18 @@ Waves 1–5 are shipped and stand. *Breakthrough* (5) and *Breakwater* (10) are 
 | 5 | Grindstone | | 10 | **Watershed** |
 
 *Flash Flood* is the Courser's debut, and the name is the tutorial: the one thing that still moves fast through a slot canyon. *Watershed* is the finale — the decisive point, in a canyon a river made.
+
+**The Fork's ten waves** (staged with the map) are named for the glacial braid — melt, ice and the two channels:
+
+| Wave | Name | | Wave | Name |
+| --- | --- | --- | --- | --- |
+| 1 | Thaw | | 6 | Skein |
+| 2 | **Braid** | | 7 | Splinter |
+| 3 | Rime | | 8 | Cornice |
+| 4 | Whiteout | | 9 | **Confluence** |
+| 5 | Crevasse | | 10 | **Breakup** |
+
+*Braid* is the wave that introduces the second road — the name is the map. *Skein* is the Skiff formation overhead, a word for a flight of geese. *Confluence* is both roads under simultaneous pressure, and *Breakup* is a frozen river letting go — the third campaign finale in the B-echo begun by *Breakthrough* and answered by *Breakwater*.
 
 ---
 

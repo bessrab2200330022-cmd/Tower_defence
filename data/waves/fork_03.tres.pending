@@ -1,0 +1,33 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_shielded"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 4
+start_delay_ticks = 0
+interval_ticks = 60
+route_hint = 0
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 7
+start_delay_ticks = 0
+interval_ticks = 45
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 8
+start_delay_ticks = 500
+interval_ticks = 20
+
+[resource]
+script = ExtResource("1_wave")
+id = "fork_03"
+display_name = "Rime"
+groups = [SubResource("Group_shielded"), SubResource("Group_walkers"), SubResource("Group_drones")]

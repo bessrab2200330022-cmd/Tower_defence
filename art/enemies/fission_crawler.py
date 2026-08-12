@@ -94,8 +94,14 @@ def build_segment(name, parent, offset_y, mats, scale=1.0, seam_face=0.0):
     # many: the machine should look like it scuttles, which is also why it is
     # the only enemy with more than two legs a side.
     for index, along in enumerate((-0.2, 0.2)):
+        # Every dimension here scales. The leg was the one part that did not,
+        # and at scale 1.0 it hid: the 0.22 lift and the 0.22 half-length cancel
+        # and the foot lands exactly on z = 0. fission_spawn.py builds at 0.75,
+        # where the lift shrank and the leg did not - it punched 0.054 through
+        # the board. A latent bug that only exists for a caller passing scale.
         leg = studio.box(
-            "%sLeg%d" % (name, index + 1), size=(0.09, 0.1, 0.44),
+            "%sLeg%d" % (name, index + 1),
+            size=(0.09 * scale, 0.1 * scale, 0.44 * scale),
             parent=parent,
             location=(0.34 * scale, offset_y + along * scale, 0.22 * scale),
             material=mats["dark"],

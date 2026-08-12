@@ -1,0 +1,45 @@
+[gd_resource type="Resource" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_crawlers"]
+script = ExtResource("2_group")
+enemy_id = "fission_crawler"
+count = 6
+start_delay_ticks = 0
+interval_ticks = 80
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 8
+start_delay_ticks = 200
+interval_ticks = 45
+
+[sub_resource type="Resource" id="Group_menders"]
+script = ExtResource("2_group")
+enemy_id = "mender"
+count = 1
+start_delay_ticks = 240
+interval_ticks = 60
+
+[sub_resource type="Resource" id="Group_menders_2"]
+script = ExtResource("2_group")
+enemy_id = "mender"
+count = 1
+start_delay_ticks = 480
+interval_ticks = 60
+
+[sub_resource type="Resource" id="Group_skiffs"]
+script = ExtResource("2_group")
+enemy_id = "skiff"
+count = 3
+start_delay_ticks = 700
+interval_ticks = 90
+
+[resource]
+script = ExtResource("1_wave")
+id = "wave_09"
+display_name = "Fission"
+groups = [SubResource("Group_crawlers"), SubResource("Group_walkers"), SubResource("Group_menders"), SubResource("Group_menders_2"), SubResource("Group_skiffs")]

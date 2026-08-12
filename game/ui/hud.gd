@@ -10,9 +10,16 @@ signal speed_changed(multiplier: float)
 ## simulation commands; the HUD itself never touches sim state.
 signal upgrade_requested(tower_id: int, def_id: String)
 signal tower_sell_requested(cell: Vector2i)
+## Forwarded from the pause menu, which the Hud hosts rather than main.gd - see
+## game/ui/pause_menu.gd for why that placement is deliberate.
+signal resume_pressed()
+signal restart_pressed()
+signal quit_to_menu_pressed()
 
 const Types := preload("res://sim/sim_types.gd")
 const TowerPanelScript := preload("res://game/ui/tower_panel.gd")
+const PauseMenuScript := preload("res://game/ui/pause_menu.gd")
+const InputActions := preload("res://game/input_actions.gd")
 
 const PHASE_LABELS := ["Build", "Combat", "Victory", "Defeat"]
 const SPEED_OPTIONS := [0.0, 1.0, 2.0, 4.0]
@@ -31,6 +38,7 @@ var _start_button: Button
 var _sell_button: Button
 
 var _tower_panel: PanelContainer
+var _pause_menu: Control
 
 var _tower_buttons: Array[Button] = []
 var _tower_ids: Array = []
@@ -42,6 +50,9 @@ var _message_ttl: float = 0.0
 func build(simulation, catalog_ref) -> void:
 	sim = simulation
 	catalog = catalog_ref
+	# tests/run_autoplay.gd builds a Hud without ever going through main.gd, so
+	# this cannot rely on the shell having installed the actions first.
+	InputActions.ensure_installed()
 
 	var root := Control.new()
 	root.name = "Root"
@@ -54,6 +65,34 @@ func build(simulation, catalog_ref) -> void:
 	_build_right_controls(root)
 	_build_tower_panel(root)
 	_build_messages(root)
+	_build_pause_menu(root)
+
+
+## Built on every Hud, hidden until asked for. That means the autoplay gate
+## constructs it on every run even though it never opens it, which is the most
+## coverage this UI can get - see the note at the top of pause_menu.gd.
+func _build_pause_menu(root: Control) -> void:
+	_pause_menu = PauseMenuScript.new()
+	_pause_menu.name = "PauseMenu"
+	root.add_child(_pause_menu)
+	_pause_menu.build()
+	_pause_menu.resume_pressed.connect(func() -> void: resume_pressed.emit())
+	_pause_menu.restart_pressed.connect(func() -> void: restart_pressed.emit())
+	_pause_menu.quit_to_menu_pressed.connect(func() -> void: quit_to_menu_pressed.emit())
+
+
+func open_pause_menu() -> void:
+	if _pause_menu != null:
+		_pause_menu.open()
+
+
+func close_pause_menu() -> void:
+	if _pause_menu != null:
+		_pause_menu.close()
+
+
+func pause_settings_open() -> bool:
+	return _pause_menu != null and _pause_menu.settings_open()
 
 
 ## The inspection panel sits on the left, clear of the build bar along the

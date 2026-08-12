@@ -29,6 +29,8 @@ const DISPLAY_DIVISOR: int = 1
 
 const COLOR_LIGHT := Color(1.0, 0.95, 0.82)
 const COLOR_HEAVY := Color(1.0, 0.72, 0.32)
+## Green and signed, so a heal cannot be misread as a small hit at a glance.
+const COLOR_HEAL := Color(0.45, 1.0, 0.62)
 
 ## Sideways drift, from a fixed table rather than randf(), so two runs of the
 ## same match produce the same picture and a screenshot comparison stays
@@ -79,6 +81,27 @@ func show_hit(at: Vector3, amount: int, max_hp: int) -> void:
 	label.text = str(maxi(amount / DISPLAY_DIVISOR, 1))
 	label.modulate = COLOR_HEAVY if heavy else COLOR_LIGHT
 	label.pixel_size = 0.00130 if heavy else 0.00100
+	label.visible = true
+
+	_life[index] = LIFETIME
+	_origin[index] = at
+	_drift[index] = DRIFT[index % DRIFT.size()]
+	label.position = at
+
+
+## A Mender pulse landing. Same pool as damage - a heal and a hit on the same
+## enemy in the same frame should queue against each other rather than be drawn
+## by two systems with independent budgets.
+func show_heal(at: Vector3, amount: int) -> void:
+	if amount <= 0 or _labels.is_empty():
+		return
+	var index: int = _next
+	_next = (_next + 1) % _labels.size()
+
+	var label: Label3D = _labels[index]
+	label.text = "+%d" % maxi(amount / DISPLAY_DIVISOR, 1)
+	label.modulate = COLOR_HEAL
+	label.pixel_size = 0.00110
 	label.visible = true
 
 	_life[index] = LIFETIME

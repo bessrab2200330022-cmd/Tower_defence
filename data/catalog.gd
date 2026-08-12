@@ -135,6 +135,16 @@ func validate() -> PackedStringArray:
 		var message: String = enemies[id].is_valid()
 		if message != "":
 			problems.append(message)
+		# An enemy referenced only by an ability is legitimate - fission_spawn
+		# never appears in a spawn group and exists solely as split offspring -
+		# so this resolves the reference forwards. There is deliberately no
+		# "orphaned enemy" check anywhere: an unreferenced def is a def waiting
+		# for a wave, not an error.
+		for child_id in enemies[id].spawn_on_death:
+			if not enemies.has(str(child_id)):
+				problems.append("enemy '%s' spawns unknown enemy '%s'" % [id, str(child_id)])
+			elif str(child_id) == str(id):
+				problems.append("enemy '%s' spawns itself on death" % id)
 
 	for id in waves:
 		var wave = waves[id]

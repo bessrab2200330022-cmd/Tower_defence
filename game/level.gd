@@ -23,6 +23,7 @@ const AudioScript := preload("res://game/audio/audio_director.gd")
 const RangeRingScript := preload("res://game/views/range_ring.gd")
 const CellMarkerScript := preload("res://game/views/cell_marker.gd")
 const DamageNumbersScript := preload("res://game/views/damage_numbers.gd")
+const InputActions := preload("res://game/input_actions.gd")
 
 ## Placement feedback palette. Green means the click will work, red means it
 ## will be refused, amber marks a tower already standing there, and the pale
@@ -53,6 +54,37 @@ const COLOR_RANGE := Color(0.45, 0.85, 1.0)
 ## rather than written down.
 static var EVENT_TOWER_UPGRADED: int = int(Types.Event.get("TOWER_UPGRADED", -1))
 
+## The three ability events, bound the same way and for the same reason: the
+## simulation agent is writing the producers in a parallel session and had not
+## landed them when this was written. Each resolves to -1 until it exists, which
+## no event's `type` can equal.
+##
+## Of the three only ENEMY_SPLIT is covered by the autoplay assert, because it is
+## the only one that creates entities - two new enemies mean two new views, and a
+## missing consumer would show as a count mismatch. ENEMY_HEALED and AURA_APPLIED
+## mutate without creating, so they are in the same blind spot TOWER_UPGRADED is.
+static var EVENT_ENEMY_HEALED: int = int(Types.Event.get("ENEMY_HEALED", -1))
+static var EVENT_ENEMY_SPLIT: int = int(Types.Event.get("ENEMY_SPLIT", -1))
+static var EVENT_AURA_APPLIED: int = int(Types.Event.get("AURA_APPLIED", -1))
+
+## Heal pulses are green because the number they accompany is a *gain*; using the
+## damage palette for both is how a healed enemy reads as a bug.
+const COLOR_HEAL := Color(0.45, 1.0, 0.62)
+const COLOR_AURA := Color(0.65, 0.55, 1.0)
+
+## How long an aura ring survives without being refreshed.
+##
+## The contract has an "applied" event and no "removed" event, so persistence is
+## built as a heartbeat: every AURA_APPLIED re-arms the ring, and when the source
+## dies the events stop and the ring fades on its own. That is deliberately
+## robust to whatever cadence the sim ends up emitting at - per tick, per pulse
+## or per newly-affected enemy all work - and it cannot leak a ring for a Warden
+## that is no longer alive.
+const AURA_TTL: float = 0.9
+## Fallback when the source's def carries no radius field. Only used until the
+## enemy schema grows one.
+const AURA_FALLBACK_RADIUS: float = 4.0
+
 var sim
 var catalog
 var map_def
@@ -73,6 +105,12 @@ var _projectile_views: Dictionary = {}
 ## view dictionaries: same keys, same lifetime.
 var _tower_defs: Dictionary = {}
 var _enemy_defs: Dictionary = {}
+
+## source enemy id -> its aura ring, and how long that ring has left. Not counted
+## by view_counts(): these track a source's *ability*, not an entity, and the
+## count invariant is about one view per sim entity.
+var _aura_rings: Dictionary = {}
+var _aura_life: Dictionary = {}
 
 ## Seconds between projectile trail sparks.
 const TRAIL_INTERVAL: float = 0.045
@@ -101,6 +139,9 @@ func build(simulation, catalog_ref, map_resource) -> void:
 	sim = simulation
 	catalog = catalog_ref
 	map_def = map_resource
+	# The camera reads InputMap actions and tests/run_autoplay.gd builds a Level
+	# without main.gd, so the actions have to exist by the time it does.
+	InputActions.ensure_installed()
 
 	_build_environment()
 	_build_board()
@@ -229,6 +270,15 @@ func consume_events(events: Array) -> void:
 		if type == EVENT_TOWER_UPGRADED:
 			_on_tower_upgraded(event)
 			continue
+		if type == EVENT_ENEMY_HEALED:
+			_on_enemy_healed(event)
+			continue
+		if type == EVENT_ENEMY_SPLIT:
+			_on_enemy_split(event)
+			continue
+		if type == EVENT_AURA_APPLIED:
+			_on_aura_applied(event)
+			continue
 
 		match type:
 			Types.Event.ENEMY_SPAWNED:
@@ -241,7 +291,7 @@ func consume_events(events: Array) -> void:
 					# Lifted to roughly the top of the body, not the feet, so the
 					# number does not spawn inside the model it belongs to.
 					damage_numbers.show_hit(
-						_on_ground(event["position"]) + Vector3(0.0, 1.1, 0.0),
+						_at_enemy(hit, event["position"]) + Vector3(0.0, 1.1, 0.0),
 						int(event.get("amount", 0)), int(event.get("max_hp", 0)))
 			Types.Event.ENEMY_KILLED:
 				_on_enemy_killed(event)
@@ -378,6 +428,104 @@ func _on_tower_upgraded(event: Dictionary) -> void:
 	effects.spawn_ring(at, def.effect_color, 2.1)
 
 
+## A Mender pulse. docs/design/enemies.md is explicit that without something
+## visible the healed enemy's bar jumping backwards reads as a bug rather than as
+## an enemy ability, so this is a ring and a number, not just a number.
+##
+## Speculative until the sim emits it. Contract:
+##   {"type": ENEMY_HEALED, "enemy_id": int, "amount": int, "hp": int}
+func _on_enemy_healed(event: Dictionary) -> void:
+	var view = _enemy_views.get(int(event.get("enemy_id", 0)), null)
+	if view == null:
+		return
+	var at: Vector3 = view.position
+	effects.spawn_ring(at, COLOR_HEAL, 1.25)
+	effects.spawn_burst(at + Vector3(0.0, 0.5, 0.0), COLOR_HEAL, 0.45)
+	if damage_numbers != null:
+		damage_numbers.show_heal(at + Vector3(0.0, 1.1, 0.0), int(event.get("amount", 0)))
+
+
+## A Fission Crawler coming apart. The children arrive as their own
+## ENEMY_SPAWNED events and get views the normal way; all this adds is the
+## moment of the split, so the two new bodies are not simply there.
+##
+## Contract:
+##   {"type": ENEMY_SPLIT, "enemy_id": int, "spawned": PackedInt32Array}
+func _on_enemy_split(event: Dictionary) -> void:
+	var view = _enemy_views.get(int(event.get("enemy_id", 0)), null)
+	if view == null:
+		return
+	var def = _enemy_defs.get(int(event.get("enemy_id", 0)), null)
+	var color: Color = def.body_color if def != null else Color(0.9, 0.7, 0.4)
+	effects.spawn_burst(view.position + Vector3(0.0, 0.5, 0.0), color, 0.9)
+	effects.spawn_ring(view.position, color, 1.6)
+
+
+## A Warden's aura reaching an enemy. Draws a persistent radius on the SOURCE,
+## because "shoot the shepherd" is a lesson the game can only teach if the
+## shepherd is the thing marked - marking the buffed enemy points at the symptom.
+##
+## Contract:
+##   {"type": AURA_APPLIED, "enemy_id": int, "source_id": int}
+func _on_aura_applied(event: Dictionary) -> void:
+	var source_id: int = int(event.get("source_id", 0))
+	var source = _enemy_views.get(source_id, null)
+	if source == null:
+		return
+
+	var ring = _aura_rings.get(source_id, null)
+	if ring == null:
+		ring = RangeRingScript.new()
+		ring.name = "Aura%d" % source_id
+		ring.set_tint(COLOR_AURA)
+		ring.set_intensity(0.75)
+		add_child(ring)
+		_aura_rings[source_id] = ring
+	ring.show_at(source.position, _aura_radius(source_id))
+	_aura_life[source_id] = AURA_TTL
+
+	# And a flicker on the enemy that just got covered, so the link between the
+	# ring and the effect is visible rather than inferred.
+	var covered = _enemy_views.get(int(event.get("enemy_id", 0)), null)
+	if covered != null and covered != source:
+		effects.spawn_burst(covered.position + Vector3(0.0, 0.9, 0.0), COLOR_AURA, 0.3)
+
+
+## Radius of an aura, from the source's own def when the enemy schema carries
+## one. Probed by name because it does not exist yet - the same reason the event
+## ids above are resolved rather than written down.
+func _aura_radius(source_id: int) -> float:
+	var def = _enemy_defs.get(source_id, null)
+	if def != null:
+		for field in ["aura_radius", "ability_radius", "effect_radius"]:
+			if field in def:
+				var value: float = float(def.get(field))
+				if value > 0.0:
+					return value
+	return AURA_FALLBACK_RADIUS
+
+
+## Fades aura rings whose source has stopped emitting - a Warden that died, or
+## one whose pulse simply ended. Called once per frame from sync().
+func _step_auras(delta: float) -> void:
+	if _aura_rings.is_empty():
+		return
+	for source_id in _aura_rings.keys():
+		var left: float = float(_aura_life.get(source_id, 0.0)) - delta
+		var ring = _aura_rings[source_id]
+		var source = _enemy_views.get(source_id, null)
+		if left <= 0.0 or source == null or not is_instance_valid(ring):
+			if is_instance_valid(ring):
+				ring.queue_free()
+			_aura_rings.erase(source_id)
+			_aura_life.erase(source_id)
+			continue
+		_aura_life[source_id] = left
+		# Follows its source rather than sitting where the pulse landed.
+		ring.show_at(source.position, _aura_radius(source_id))
+		ring.set_intensity(0.75 * clampf(left / AURA_TTL, 0.0, 1.0))
+
+
 func _on_enemy_killed(event: Dictionary) -> void:
 	var enemy_id := int(event["enemy_id"])
 	var def = _enemy_defs.get(enemy_id, null)
@@ -385,7 +533,7 @@ func _on_enemy_killed(event: Dictionary) -> void:
 	# Bigger enemies die harder. Scaled off the def's radius so a Brute's death
 	# carries weight a Drone's does not.
 	var scale: float = 1.0 if def == null else clampf(def.radius / 0.45, 0.7, 2.0)
-	var position: Vector3 = _on_ground(event["position"])
+	var position: Vector3 = _at_enemy(_enemy_views.get(enemy_id, null), event["position"])
 
 	if scale >= 1.3:
 		# Heavy enemies detonate. Under that threshold an explosion every time a
@@ -401,6 +549,20 @@ func _on_enemy_killed(event: Dictionary) -> void:
 ## anything spawned at an enemy's feet needs the same drop the enemy view gets.
 static func _on_ground(position: Vector3) -> Vector3:
 	return Vector3(position.x, position.y + BoardScript.PATH_TOP, position.z)
+
+
+## Where an effect belonging to a specific enemy should appear.
+##
+## The same drop as _on_ground for anything that walks, but a flier is not on the
+## ground: its view sits at its cruise altitude, and a death explosion or a
+## damage number pinned to y=0 would appear on the terrain underneath a Skiff
+## rather than at it. Asking the view means this is right for both without the
+## caller having to know which it is dealing with.
+static func _at_enemy(view, position: Vector3) -> Vector3:
+	var lift: float = BoardScript.PATH_TOP
+	if view != null and is_instance_valid(view):
+		lift = view.vertical_offset()
+	return Vector3(position.x, position.y + lift, position.z)
 
 
 ## Falls back to a neutral blue when a tower def is missing, which only happens
@@ -501,6 +663,7 @@ func sync(delta: float, alpha: float = 1.0) -> void:
 		audio.step(delta)
 	if damage_numbers != null:
 		damage_numbers.step(delta)
+	_step_auras(delta)
 	_update_ghost()
 
 

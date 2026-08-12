@@ -51,6 +51,9 @@ var enemies: Array = []
 var towers: Array = []
 var projectiles: Array = []
 var waypoints: Array[Vector3] = []
+## The flier lane: a straight spawn-to-goal chord at SimTypes.AIR_CRUISE_HEIGHT.
+## Two points, so a flier's path_index bookkeeping is the same code as a walker's.
+var air_waypoints: Array[Vector3] = []
 
 var events: Array[Dictionary] = []
 
@@ -92,6 +95,13 @@ func setup(map_resource, catalog_ref, seed_value: int = 1) -> bool:
 	waypoints = []
 	for cell in path_finder.path:
 		waypoints.append(grid.cell_to_world(cell))
+
+	# Fliers ignore the route entirely. On The Crossing this chord is ~40 units
+	# against the walkers' 122, which is why enemies.md insists fliers are
+	# measured as their own column - the same HP is on the board for a third of
+	# the time.
+	var lift := Vector3(0.0, Types.AIR_CRUISE_HEIGHT, 0.0)
+	air_waypoints = [grid.cell_to_world(grid.spawn) + lift, grid.cell_to_world(grid.goal) + lift]
 
 	rng = RngScript.new(seed_value)
 	economy = EconomyScript.new(map_def.starting_credits, map_def.starting_lives)
@@ -288,6 +298,7 @@ func _apply_def_to_tower(tower, def) -> void:
 	tower.slow_percent = def.slow_percent
 	tower.slow_ticks = def.slow_ticks
 	tower.target_mode = def.target_mode
+	tower.can_target_air = def.can_target_air
 	# A cooldown already ticking was measured against the OLD interval. Clamping
 	# stops an upgrade to a faster gun from being a temporary downgrade, without
 	# handing out a free instant shot the way resetting to zero would.
@@ -382,6 +393,11 @@ func step() -> void:
 		_spawn_due_enemies()
 
 	_step_enemies(delta)
+	# Auras are resolved before anything fires, so every shot this tick sees the
+	# same membership. Resolving lazily at damage time would make the answer
+	# depend on tower iteration order.
+	_recompute_auras()
+	_step_abilities()
 	_step_towers(delta)
 	_step_projectiles(delta)
 	_compact_entities()
@@ -403,6 +419,31 @@ func _spawn_enemy(def_id: String) -> void:
 		dropped_spawns += 1
 		return
 
+	_create_enemy(def, 1, _route_for(def.flies)[0], 0.0)
+
+
+## The flier lane or the walking route. One function so nothing downstream has
+## to remember which array an enemy belongs to.
+func _route_for(flies: bool) -> Array:
+	return air_waypoints if flies else waypoints
+
+
+## Total length of a lane, so FIRST/LAST targeting can compare a flier's chord
+## against a walker's tour as fractions rather than as raw distances.
+func _route_length(flies: bool) -> float:
+	var route: Array = _route_for(flies)
+	var total: float = 0.0
+	for i in range(1, route.size()):
+		total += route[i - 1].distance_to(route[i])
+	return maxf(total, 0.001)
+
+
+## Every enemy in the game is born here, whether it walked out of the spawn point
+## or fell out of a Fission Crawler mid-path. Split children therefore inherit
+## exactly the same movement bookkeeping - path_index, position and the
+## distance_travelled that FIRST/LAST targeting reads - which is what enemies.md
+## flags as the Crawler's real determinism risk.
+func _create_enemy(def, path_index: int, position: Vector3, distance_travelled: float):
 	var enemy = EnemyScript.new()
 	enemy.id = _next_enemy_id
 	_next_enemy_id += 1
@@ -413,8 +454,21 @@ func _spawn_enemy(def_id: String) -> void:
 	enemy.armor_type = def.armor_type
 	enemy.bounty = def.bounty
 	enemy.leak_damage = maxi(def.leak_damage, 0)
-	enemy.position = waypoints[0]
-	enemy.path_index = 1
+	enemy.flies = def.flies
+	enemy.ability = def.ability
+	enemy.ability_radius = def.ability_radius
+	enemy.ability_percent = def.ability_percent
+	enemy.ability_amount = def.ability_amount
+	enemy.ability_interval = maxi(def.ability_interval, 1)
+	enemy.spawn_on_death = def.spawn_on_death
+	# Anchored on THIS enemy's spawn tick, never on a global clock: two Menders
+	# that arrive 40 ticks apart stay 40 ticks out of phase for their whole
+	# lives. ROADMAP trap 2 is a schedule anchored on a tick nobody steps.
+	enemy.ability_next_tick = tick + enemy.ability_interval
+	enemy.position = position
+	enemy.path_index = path_index
+	enemy.distance_travelled = distance_travelled
+	enemy.route_length = _route_length(def.flies)
 
 	enemies.append(enemy)
 	_enemy_by_id[enemy.id] = enemy
@@ -424,6 +478,7 @@ func _spawn_enemy(def_id: String) -> void:
 		"position": enemy.position,
 		"max_hp": enemy.max_hp,
 	})
+	return enemy
 
 
 func _step_enemies(delta: float) -> void:
@@ -431,9 +486,10 @@ func _step_enemies(delta: float) -> void:
 		if not enemy.alive or enemy.reached_goal:
 			continue
 		enemy.tick_status()
+		var route: Array = _route_for(enemy.flies)
 		var remaining: float = enemy.current_speed() * delta
-		while remaining > 0.0 and enemy.path_index < waypoints.size():
-			var target: Vector3 = waypoints[enemy.path_index]
+		while remaining > 0.0 and enemy.path_index < route.size():
+			var target: Vector3 = route[enemy.path_index]
 			var to_target: Vector3 = target - enemy.position
 			var distance: float = to_target.length()
 			if distance <= remaining:
@@ -446,7 +502,7 @@ func _step_enemies(delta: float) -> void:
 				enemy.distance_travelled += remaining
 				remaining = 0.0
 
-		if enemy.path_index >= waypoints.size():
+		if enemy.path_index >= route.size():
 			enemy.reached_goal = true
 			var lost: int = economy.lose_lives(enemy.leak_damage)
 			# def_id rides along because the enemy is compacted away this same
@@ -458,6 +514,105 @@ func _step_enemies(delta: float) -> void:
 				"lives_lost": lost,
 			})
 			_emit(Types.Event.LIVES_CHANGED, {"lives": economy.lives})
+
+
+## AURA and HEAL_PULSE, dispatched on the enum. A fifth ability is a new branch
+## here plus a new value in SimTypes.Ability - never a subclass. ROADMAP 2.6.
+
+## Membership is recomputed from scratch every tick, in fixed entity-array order,
+## so it can never drift out of sync with who is alive and where they are.
+func _recompute_auras() -> void:
+	for enemy in enemies:
+		enemy.aura_percent = 100
+
+	for source in enemies:
+		if source.ability != Types.Ability.AURA:
+			continue
+		if not source.alive or source.reached_goal:
+			continue
+		var radius_sq: float = source.ability_radius * source.ability_radius
+		for target in enemies:
+			if target == source or not target.alive or target.reached_goal:
+				continue
+			# Aura-bearers never protect each other, so a Warden pair cannot
+			# become a mutual fortress.
+			if target.ability == Types.Ability.AURA:
+				continue
+			var offset: Vector3 = target.position - source.position
+			if offset.x * offset.x + offset.z * offset.z > radius_sq:
+				continue
+			# Non-stacking: overlapping auras apply once, strongest wins. Two
+			# Wardens must not multiply to 36%.
+			if target.aura_percent == 100 or source.ability_percent < target.aura_percent:
+				target.aura_percent = source.ability_percent
+				target.aura_source_id = source.id
+
+	# Edge-triggered rather than level-triggered: emitting for every protected
+	# enemy every tick would put hundreds of events a second on the queue for
+	# state that rarely changes. Loss of protection is the same event with
+	# source_id 0, since enemy ids start at 1 - flagged to A4.
+	for enemy in enemies:
+		if enemy.aura_percent == enemy.aura_reported_percent:
+			continue
+		enemy.aura_reported_percent = enemy.aura_percent
+		if enemy.aura_percent == 100:
+			enemy.aura_source_id = 0
+		_emit(Types.Event.AURA_APPLIED, {
+			"enemy_id": enemy.id,
+			"source_id": enemy.aura_source_id,
+		})
+
+
+func _step_abilities() -> void:
+	for source in enemies:
+		if source.ability != Types.Ability.HEAL_PULSE:
+			continue
+		if not source.alive or source.reached_goal:
+			continue
+		if tick < source.ability_next_tick:
+			continue
+		# Advancing by the interval rather than rebasing on `tick` keeps the
+		# cadence anchored on the spawn tick for the enemy's whole life.
+		source.ability_next_tick += source.ability_interval
+		_heal_pulse(source)
+
+
+func _heal_pulse(source) -> void:
+	var radius_sq: float = source.ability_radius * source.ability_radius
+	for target in enemies:
+		if target == source or not target.alive or target.reached_goal:
+			continue
+		# Never another healer: no mutual-tank loops, no immortal pairs.
+		if target.ability == Types.Ability.HEAL_PULSE:
+			continue
+		var offset: Vector3 = target.position - source.position
+		if offset.x * offset.x + offset.z * offset.z > radius_sq:
+			continue
+		var healed: int = target.heal(source.ability_amount)
+		if healed <= 0:
+			continue
+		_emit(Types.Event.ENEMY_HEALED, {
+			"enemy_id": target.id,
+			"amount": healed,
+			"hp": target.hp,
+		})
+
+
+## SPLIT_ON_DEATH. Children are born at the parent's exact path progress in the
+## same tick its death is processed, with sequential ids in fixed order, through
+## the same _create_enemy every other spawn uses.
+func _split_on_death(parent) -> void:
+	var spawned := PackedInt32Array()
+	for child_id in parent.spawn_on_death:
+		var def = catalog.get_enemy(str(child_id))
+		if def == null:
+			dropped_spawns += 1
+			continue
+		var child = _create_enemy(def, parent.path_index, parent.position, parent.distance_travelled)
+		if child != null:
+			spawned.append(child.id)
+	if not spawned.is_empty():
+		_emit(Types.Event.ENEMY_SPLIT, {"enemy_id": parent.id, "spawned": spawned})
 
 
 func _step_towers(_delta: float) -> void:
@@ -553,17 +708,22 @@ func _step_projectiles(delta: float) -> void:
 ## truncating twice on its way to the enemy.
 func _apply_payload(source_tower, primary, impact: Vector3, damage: int, damage_type: int,
 		splash_radius: float, slow_percent: int, slow_ticks: int) -> void:
+	var reaches_air: bool = source_tower == null or source_tower.can_target_air
 	if splash_radius > 0.0:
-		for enemy in TargetingScript.in_radius(enemies, impact, splash_radius):
+		for enemy in TargetingScript.in_radius(enemies, impact, splash_radius, reaches_air):
 			var offset: Vector3 = enemy.position - impact
 			var distance: float = sqrt(offset.x * offset.x + offset.z * offset.z)
 			var falloff: int = DamageScript.splash_percent_at(distance, splash_radius)
-			var final_damage: int = DamageScript.compute_splash(
-				damage, damage_type, enemy.armor_type, falloff)
+			# Armour, falloff and aura fold into ONE division. Splitting them
+			# truncates three times and hands out protection the Warden never
+			# advertised - see DamageTable.compute_splash_with_aura.
+			var final_damage: int = DamageScript.compute_splash_with_aura(
+				damage, damage_type, enemy.armor_type, falloff, enemy.incoming_percent())
 			_damage_enemy(source_tower, enemy, final_damage, slow_percent, slow_ticks)
 	elif primary != null:
 		_damage_enemy(source_tower, primary,
-			DamageScript.compute(damage, damage_type, primary.armor_type),
+			DamageScript.compute_with_aura(damage, damage_type, primary.armor_type,
+				primary.incoming_percent()),
 			slow_percent, slow_ticks)
 
 
@@ -598,6 +758,10 @@ func _damage_enemy(source_tower, enemy, final_damage: int,
 			"position": enemy.position,
 			"killer_tower_id": source_tower.id if source_tower != null else 0,
 		})
+		# Order is fixed by enemies.md: parent ENEMY_KILLED, then each child's
+		# ENEMY_SPAWNED, then ENEMY_SPLIT naming ids the consumer has already seen.
+		if not enemy.spawn_on_death.is_empty():
+			_split_on_death(enemy)
 		_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
 
 
@@ -704,6 +868,12 @@ func snapshot_hash() -> int:
 		# match invisibly - and status effects are about to become a stack.
 		h = _mix(h, enemy.slow_percent)
 		h = _mix(h, enemy.slow_ticks_left)
+		# Three of the four abilities mutate entity state outside the damage
+		# path. Healed HP rides in enemy.hp above, and split offspring are real
+		# enemies caught by this same loop - but aura membership and each
+		# healer's private schedule would otherwise be invisible to a replay.
+		h = _mix(h, enemy.aura_percent)
+		h = _mix(h, enemy.ability_next_tick)
 	for tower in towers:
 		h = _mix(h, tower.id)
 		h = _mix(h, tower.cooldown_ticks)

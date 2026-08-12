@@ -22,6 +22,7 @@ splash_radius = 2.0
 slow_percent = 0
 slow_ticks = 0
 target_mode = 0
+can_target_air = true
 mesh_path = "res://data/models/towers/arc_cannon_t3a.glb"
 mesh_scale = 1.0
 projectile_mesh_path = ""

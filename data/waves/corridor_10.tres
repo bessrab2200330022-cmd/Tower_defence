@@ -29,7 +29,7 @@ script = ExtResource("2_group")
 enemy_id = "courser"
 count = 10
 start_delay_ticks = 1240
-interval_ticks = 14
+interval_ticks = 12
 
 [resource]
 script = ExtResource("1_wave")

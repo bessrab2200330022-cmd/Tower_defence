@@ -1,0 +1,79 @@
+[gd_resource type="Resource" load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 22
+start_delay_ticks = 0
+interval_ticks = 7
+
+[sub_resource type="Resource" id="Group_coursers"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 12
+start_delay_ticks = 260
+interval_ticks = 12
+
+[sub_resource type="Resource" id="Group_wardens"]
+script = ExtResource("2_group")
+enemy_id = "warden"
+count = 1
+start_delay_ticks = 600
+interval_ticks = 60
+route_hint = 0
+
+[sub_resource type="Resource" id="Group_shielded"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 4
+start_delay_ticks = 630
+interval_ticks = 45
+route_hint = 0
+
+[sub_resource type="Resource" id="Group_wardens_2"]
+script = ExtResource("2_group")
+enemy_id = "warden"
+count = 1
+start_delay_ticks = 780
+interval_ticks = 60
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_shielded_2"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 4
+start_delay_ticks = 810
+interval_ticks = 45
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_brutes"]
+script = ExtResource("2_group")
+enemy_id = "brute"
+count = 2
+start_delay_ticks = 1300
+interval_ticks = 30
+route_hint = 0
+
+[sub_resource type="Resource" id="Group_brutes_2"]
+script = ExtResource("2_group")
+enemy_id = "brute"
+count = 2
+start_delay_ticks = 1360
+interval_ticks = 30
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_skiffs"]
+script = ExtResource("2_group")
+enemy_id = "skiff"
+count = 6
+start_delay_ticks = 1500
+interval_ticks = 80
+
+[resource]
+script = ExtResource("1_wave")
+id = "fork_10"
+display_name = "Breakup"
+groups = [SubResource("Group_drones"), SubResource("Group_coursers"), SubResource("Group_wardens"), SubResource("Group_shielded"), SubResource("Group_wardens_2"), SubResource("Group_shielded_2"), SubResource("Group_brutes"), SubResource("Group_brutes_2"), SubResource("Group_skiffs")]

@@ -1,0 +1,42 @@
+[gd_resource type="Resource" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_wardens"]
+script = ExtResource("2_group")
+enemy_id = "warden"
+count = 1
+start_delay_ticks = 0
+interval_ticks = 60
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_shielded"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 6
+start_delay_ticks = 30
+interval_ticks = 50
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 6
+start_delay_ticks = 60
+interval_ticks = 40
+route_hint = 1
+
+[sub_resource type="Resource" id="Group_coursers"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 10
+start_delay_ticks = 500
+interval_ticks = 12
+route_hint = 0
+
+[resource]
+script = ExtResource("1_wave")
+id = "fork_08"
+display_name = "Cornice"
+groups = [SubResource("Group_wardens"), SubResource("Group_shielded"), SubResource("Group_walkers"), SubResource("Group_coursers")]

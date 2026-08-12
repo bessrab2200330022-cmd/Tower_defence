@@ -54,14 +54,32 @@ def reset_scene():
             block.remove(item)
 
 
+# The angle the game is actually played at. game/rts_camera.gd:44 sets
+#     var pitch: float = deg_to_rad(-52.0)
+# and _apply() builds the camera offset as
+#     Vector3(sin(yaw) * cos(pitch), -sin(pitch), cos(yaw) * cos(pitch)) * distance
+# so the camera sits sin(52) = 0.79 of its distance ABOVE the focus and
+# cos(52) = 0.62 out from it: an elevation above the target of exactly 52
+# degrees. The player can tilt between PITCH_MIN -80 and PITCH_MAX -12, but -52
+# is the home value and what reset() returns to.
+RTS_ELEVATION_DEG = 52.0
+
+
 def preview_viewport(target=(0.0, 0.0, 0.85), distance=5.5,
-                     azimuth_deg=38.0, elevation_deg=24.0):
+                     azimuth_deg=38.0, elevation_deg=RTS_ELEVATION_DEG):
     """Point the user's 3D viewport at the model from a fixed angle.
 
-    Worth doing rather than relying on wherever the viewport happened to be:
-    these towers are judged from an RTS camera looking down at roughly 25
-    degrees, and a close level-on view flatters a silhouette that will actually
-    be seen mostly from above. Default elevation matches game/rts_camera.gd.
+    Worth doing rather than relying on wherever the viewport happened to be: a
+    close level-on view flatters a silhouette that will actually be seen from
+    above at distance, which is how the first Arc Cannon shipped as a squat
+    plinth with an invisible turret.
+
+    CORRECTED: this defaulted to 24 degrees and its docstring claimed that
+    matched game/rts_camera.gd. It does not - the real home pitch is 52, more
+    than double. Every silhouette judged through this helper before that fix
+    was reviewed at an angle showing far more side profile and far less top
+    than the player ever sees. If an older model looks wrong from up here, that
+    is why, and it is worth a second look rather than a defence.
 
     azimuth 0 looks straight at the model's front (the face the barrels point
     out of); positive swings clockwise.

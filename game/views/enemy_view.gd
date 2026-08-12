@@ -40,6 +40,22 @@ var using_mesh: bool = false
 ## about terrain height, the view drops the model onto the surface.
 var ground_offset: float = 0.0
 
+## Height a flier cruises at, above the ground plane the simulation works on.
+##
+## Read from the enemy's def by NAME, because `EnemyDef` has no altitude field
+## yet - the simulation agent is choosing the value in a parallel session and
+## putting it on the def. Zero means "walks", which is every enemy today, so this
+## is inert until that field exists.
+##
+## When it is non-zero it REPLACES ground_offset rather than adding to it: a
+## Skiff does not care that the path is recessed 0.22 below the grass, because it
+## is not standing on the path.
+var cruise_altitude: float = 0.0
+
+## Field names tried on the def, in order. More than one because the exact name
+## is the sim agent's to pick and this costs nothing to be tolerant about.
+const ALTITUDE_FIELDS: Array = ["cruise_altitude", "altitude", "fly_height"]
+
 var _bar_width: float = 1.0
 var _base_scale: Vector3 = Vector3.ONE
 var _flash_material: StandardMaterial3D
@@ -56,6 +72,7 @@ var _has_yaw: bool = false
 
 
 func setup(def) -> void:
+	cruise_altitude = _altitude_of(def)
 	if def.mesh_path != "" and _setup_from_mesh(def):
 		using_mesh = true
 	else:
@@ -64,6 +81,25 @@ func setup(def) -> void:
 	_base_scale = body.scale
 	_build_health_bar(def)
 	_build_flash_overlay()
+
+
+static func _altitude_of(def) -> float:
+	for field in ALTITUDE_FIELDS:
+		if field in def:
+			var value: float = float(def.get(field))
+			if value > 0.0:
+				return value
+	return 0.0
+
+
+## Where this enemy's body sits above the simulation's flat plane. A flier gets
+## its cruise altitude; a walker gets the drop onto the recessed path.
+func vertical_offset() -> float:
+	return cruise_altitude if cruise_altitude > 0.0 else ground_offset
+
+
+func is_flying() -> bool:
+	return cruise_altitude > 0.0
 
 
 ## A white additive layer applied as material_overlay on every mesh in the body.
@@ -192,7 +228,7 @@ func update_from(enemy, delta: float = 0.0, alpha: float = 1.0) -> void:
 	var shown: Vector3 = target
 	if _has_previous and alpha < 1.0:
 		shown = _previous_position.lerp(target, alpha)
-	position = shown + Vector3(0.0, ground_offset, 0.0)
+	position = shown + Vector3(0.0, vertical_offset(), 0.0)
 
 	if _has_previous:
 		_face_travel(target - _previous_position, delta)

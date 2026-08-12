@@ -1,0 +1,33 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_skiffs"]
+script = ExtResource("2_group")
+enemy_id = "skiff"
+count = 8
+start_delay_ticks = 0
+interval_ticks = 70
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 12
+start_delay_ticks = 0
+interval_ticks = 18
+route_hint = 0
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 5
+start_delay_ticks = 400
+interval_ticks = 50
+route_hint = 1
+
+[resource]
+script = ExtResource("1_wave")
+id = "fork_06"
+display_name = "Skein"
+groups = [SubResource("Group_skiffs"), SubResource("Group_drones"), SubResource("Group_walkers")]

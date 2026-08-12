@@ -22,6 +22,7 @@ splash_radius = 4.25
 slow_percent = 20
 slow_ticks = 60
 target_mode = 0
+can_target_air = false
 mesh_path = "res://data/models/towers/frost_mortar_t3b.glb"
 mesh_scale = 1.0
 projectile_mesh_path = "res://data/models/projectiles/frost_shell.glb"

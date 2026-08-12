@@ -2,13 +2,13 @@ extends Camera3D
 ## Orbiting RTS camera. Purely presentational - it never touches the simulation.
 ##
 ## Controls:
-##   WASD / arrows   pan, relative to where the camera is facing
+##   Pan / orbit / tilt / reset all come from the InputMap - the defaults are
+##   WASD and arrows, Q/E, R/F and Home, and every one of them is rebindable.
+##   See game/input_actions.gd for the table.
+##
 ##   Right-drag      orbit: horizontal yaw, vertical pitch
 ##   Middle-drag     pan
 ##   Wheel           zoom
-##   Q / E           orbit left / right
-##   R / F           tilt down / up
-##   Home            reset to the default framing
 ##
 ## Every input writes to a *target* value and the camera eases toward it. That
 ## smoothing is most of what separates a camera that feels like a camera from
@@ -93,16 +93,13 @@ func _process(delta: float) -> void:
 	_apply()
 
 
+## Reads actions, not keycodes. `get_axis` returns the two-key difference in one
+## call, so a player who rebinds pan-left keeps a working pair rather than half
+## of one.
 func _read_keyboard(delta: float) -> void:
-	var move := Vector2.ZERO
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
-		move.y -= 1.0
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
-		move.y += 1.0
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
-		move.x -= 1.0
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
-		move.x += 1.0
+	var move := Vector2(
+		Input.get_axis("bl_pan_left", "bl_pan_right"),
+		Input.get_axis("bl_pan_forward", "bl_pan_back"))
 
 	if move != Vector2.ZERO:
 		# Normalised, or holding two keys pans diagonally 41% faster.
@@ -113,15 +110,9 @@ func _read_keyboard(delta: float) -> void:
 		_target_focus += _pan_vector(move.x, move.y) * speed
 		_clamp_focus()
 
-	if Input.is_key_pressed(KEY_Q):
-		_target_yaw -= KEY_ORBIT_SPEED * delta
-	if Input.is_key_pressed(KEY_E):
-		_target_yaw += KEY_ORBIT_SPEED * delta
-
-	if Input.is_key_pressed(KEY_R):
-		_set_pitch(_target_pitch - KEY_PITCH_SPEED * delta)
-	if Input.is_key_pressed(KEY_F):
-		_set_pitch(_target_pitch + KEY_PITCH_SPEED * delta)
+	_target_yaw += Input.get_axis("bl_orbit_left", "bl_orbit_right") * KEY_ORBIT_SPEED * delta
+	_set_pitch(_target_pitch
+		+ Input.get_axis("bl_tilt_down", "bl_tilt_up") * KEY_PITCH_SPEED * delta)
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +124,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_button(event)
 	elif event is InputEventMouseMotion:
 		_handle_motion(event)
-	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_HOME:
-			reset_view()
+	elif event.is_action_pressed("bl_camera_reset"):
+		reset_view()
 
 
 func _handle_button(event: InputEventMouseButton) -> void:

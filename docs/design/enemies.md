@@ -23,6 +23,8 @@ These four cover HP, speed and armour. What they cannot do is change *how the pl
 
 Stat blocks are `.tres`-ready. A design rule used twice here and worth naming: **support units carry slightly more HP than the escorts they accompany**, so the Strongest target mode naturally finds them — the counter-play is already in the sim, waiting for 2.3's UI.
 
+*Bounty scale note:* every bounty below is on the **current** economy's scale — the ×0.77 rescale the shipped roster took in the credit retune (drone 8→6, walker 14→11, scout 26→21, brute 34→27, courser 10→8). The values here are what the shipped `courser.tres` already matches and what A3 should land for the four ability enemies: originals 18/40/36/12/4 became **14 / 31 / 28 / 9 / 3**.
+
 ### Courser — the sprinter
 
 | | |
@@ -39,7 +41,7 @@ At 9.5 it crosses The Crossing's 122-unit path in ~13s against the Walker's 27. 
 
 | | |
 | --- | --- |
-| Stats | **900 HP · speed 6.0 · Light · bounty 18 · leak 1** |
+| Stats | **900 HP · speed 6.0 · Light · bounty 14 · leak 1** |
 | Route | Ignores the path: straight line, spawn to goal, at fixed cruise height. |
 | Breaks the assumption | "The path is where the game happens." |
 | Punishes | Chokepoint-anchored builds — a perfect mortar kill-box is a thing Skiffs fly over. |
@@ -51,7 +53,7 @@ Tuning note for the harness: air HP must be tuned against **chord exposure, not 
 
 | | |
 | --- | --- |
-| Stats | **2,600 HP · speed 4.0 · Shielded · bounty 40 · leak 1** |
+| Stats | **2,600 HP · speed 4.0 · Shielded · bounty 31 · leak 1** |
 | Ability | `AURA`: living allies within **4.0** take **60%** of computed damage (a 40% reduction). Applies to every ally in radius except itself and any other aura-bearer. Non-stacking: overlapping auras apply once. |
 | Breaks the assumption | "Damage is fungible — shoot whatever is in range." |
 | Punishes | Spray-and-pray; splash-first builds that shear the herd and leave the shepherd. |
@@ -63,7 +65,7 @@ Tuning note for the harness: air HP must be tuned against **chord exposure, not 
 
 | | |
 | --- | --- |
-| Stats | **1,800 HP · speed 4.5 · Medium · bounty 36 · leak 1** |
+| Stats | **1,800 HP · speed 4.5 · Medium · bounty 28 · leak 1** |
 | Ability | `HEAL_PULSE`: every **120 ticks**, restore **300 HP** to every living non-Mender ally within **4.5**, capped at each target's `max_hp`. The Mender never heals itself or another Mender — no mutual-tank loops, no infinite pairs. |
 | Breaks the assumption | "Chip damage accumulates." |
 | Punishes | Wide low-rate damage (base mortars, unfocused fire) — 150 HP/s of regional healing simply erases it. |
@@ -75,14 +77,14 @@ Tuning note for the harness: air HP must be tuned against **chord exposure, not 
 
 | | |
 | --- | --- |
-| Parent | **2,200 HP · speed 4.2 · Medium · bounty 12 · leak 2** |
+| Parent | **2,200 HP · speed 4.2 · Medium · bounty 9 · leak 2** |
 | On death | `SPLIT_ON_DEATH`: spawns **2 × Fission Spawn** at the parent's exact path progress, same tick. |
-| Fission Spawn | **450 HP · speed 6.5 · Light · bounty 4 · leak 1.** Never appears in a spawn group; exists only as split offspring. A normal enemy def otherwise — the catalog cross-reference check must accept an enemy referenced by an ability rather than a wave. |
+| Fission Spawn | **450 HP · speed 6.5 · Light · bounty 3 · leak 1.** Never appears in a spawn group; exists only as split offspring. A normal enemy def otherwise — the catalog cross-reference check must accept an enemy referenced by an ability rather than a wave. |
 | Breaks the assumption | "A kill is progress." |
 | Punishes | Killing late: a Crawler dying at 80% releases two 6.5-speed children with a fifth of the path left. Also punishes overkill alpha — Prime Focus spends 1,000 on a 2,200 body and still faces the children. |
 | Answered by | Front-loaded damage (kill Crawlers early, children walk the whole path into your guns), splash at the death zone, Glacier near the goal as insurance. |
 
-Leak arithmetic is deliberately neutral: a leaked parent costs 2, a parent killed at the goal-mouth costs its children's 2 — no perverse incentive to *let* it leak; killing early is the only profit. Family bounty totals 20.
+Leak arithmetic is deliberately neutral: a leaked parent costs 2, a parent killed at the goal-mouth costs its children's 2 — no perverse incentive to *let* it leak; killing early is the only profit. Family bounty totals 15.
 
 **Determinism note (ROADMAP names this the real risk):** children spawn at the parent's exact path position in the same tick its death is processed, with sequentially assigned ids in fixed order; event order is `ENEMY_KILLED` (parent) then two `ENEMY_SPAWNED`. Spawning mid-path must go through the same movement bookkeeping as spawn-point entry — this needs its own test, and the test is a release gate for the Crawler.
 
@@ -120,22 +122,22 @@ Nothing else in this file needs new sim behaviour. The Courser needs literally n
 
 ## 5. The ten-wave campaign
 
-Waves 1–5 are the shipped data, restated for the arc; retunes to them belong to the balance pass, not this file. Waves 6–10 are new, designed against a **post-upgrade (2.2) kit** — do not ship them to players before upgrades exist. Lives bands are the [difficulty.md](./difficulty.md) §8 targets for the S2 player.
+Waves 1–5 are the shipped data as of the first balance pass, restated for the arc; retunes to them belong to the harness, not this file. Waves 6–10 were recalibrated against that pass's curve (the shipped wave 5 is a 62,000 HP exam now) and exist as staged data — `data/waves/wave_06..10.tres.pending`, held out of the catalog until A3's ability enemies land; `data/waves/PENDING.md` carries the activation checklist. Lives bands are the [difficulty.md](./difficulty.md) §8 targets for the S2 player.
 
 **The grammar:** each wave introduces exactly one new fact; exam waves (5, 8, 10) recombine facts already taught. The player should never meet two new ideas in the same wave.
 
 | # | Name | Composition (enemy · count · start delay · interval, ticks) | Teaches | S2 lives |
 | --- | --- | --- | --- | --- |
-| 1 | Probing Run | drone·8·0·45 | Placement | 0 |
-| 2 | Pressure | drone·12·0·30 → walker·3·240·75 | Volume; tank exists | 0–1 |
+| 1 | Probing Run | drone·6·0·52 | Placement | 0 |
+| 2 | Pressure | drone·10·0·34 → walker·3·240·75 | Volume; tank exists | 0–1 |
 | 3 | First Shields | walker·9·0·50 → shielded_scout·3·300·90 | **The damage table** | 0–2 |
-| 4 | Armour Test | shielded_scout·7·0·55 → walker·8·120·45 → brute·1·420·60 | Heavy armour | 0–2 |
-| 5 | Breakthrough | drone·16·0·22 → shielded_scout·6·180·60 → brute·3·300·150 | First exam | 1–3 |
-| 6 | **Skyfall** | drone·10·0·24 → walker·4·240·60 → **skiff·5·420·90** | The air lane | 0–2 |
-| 7 | **Stampede** | courser·6·0·30 → drone·14·240·**12** → courser·6·480·18 → walker·3·600·60 | Speed; slow's value | 0–3 |
-| 8 | **Phalanx** | walker·6·0·50 → warden·1·300·1 + shielded_scout·4·330·55 → warden·1·600·1 + shielded_scout·4·630·55 | Kill the source | 0–3 |
-| 9 | **Fission** | crawler·6·0·90 → walker·6·180·50 + mender·1·210·1 + mender·1·390·1 → skiff·2·520·120 | Overkill economics | 0–3 |
-| 10 | **Breakwater** | drone·16·0·12 + courser·8·120·18 → brute·4·420·180 + mender·1·480·1 → warden·2·900·60 + shielded_scout·6·930·45 → brute·2·1400·30 | Final exam | 2–4 |
+| 4 | Armour Test | shielded_scout·5·0·55 → walker·8·120·45 → brute·1·420·60 | Heavy armour | 0–2 |
+| 5 | Breakthrough | drone·20·0·19 → shielded_scout·10·150·48 → brute·5·260·120 | First exam | 1–3 |
+| 6 | **Skyfall** | drone·16·0·14 → walker·8·240·50 → **skiff·7·500·75** | The air lane | 0–2 |
+| 7 | **Stampede** | courser·8·0·24 → drone·16·200·**12** → courser·8·460·**12** → walker·6·620·50 | Speed; slow's value | 0–3 |
+| 8 | **Phalanx** | walker·6·0·45 → warden·1·300 + shielded_scout·4·330·55 → warden·1·640 + shielded_scout·4·670·55 | Kill the source | 0–3 |
+| 9 | **Fission** | fission_crawler·6·0·80 → walker·8·200·45 + mender·1·240 + mender·1·480 → skiff·3·700·90 | Overkill economics | 0–3 |
+| 10 | **Breakwater** | drone·16·0·12 + courser·8·140·12 → brute·5·480·150 + mender·1·540 → warden·2·1080·40 + shielded_scout·7·1120·40 → brute·2·1560·30 | Final exam | 2–4 |
 
 Choreography intent, wave by wave:
 

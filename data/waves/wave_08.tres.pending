@@ -1,0 +1,45 @@
+[gd_resource type="Resource" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_walkers"]
+script = ExtResource("2_group")
+enemy_id = "walker"
+count = 6
+start_delay_ticks = 0
+interval_ticks = 45
+
+[sub_resource type="Resource" id="Group_wardens"]
+script = ExtResource("2_group")
+enemy_id = "warden"
+count = 1
+start_delay_ticks = 300
+interval_ticks = 60
+
+[sub_resource type="Resource" id="Group_shielded"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 4
+start_delay_ticks = 330
+interval_ticks = 55
+
+[sub_resource type="Resource" id="Group_wardens_2"]
+script = ExtResource("2_group")
+enemy_id = "warden"
+count = 1
+start_delay_ticks = 640
+interval_ticks = 60
+
+[sub_resource type="Resource" id="Group_shielded_2"]
+script = ExtResource("2_group")
+enemy_id = "shielded_scout"
+count = 4
+start_delay_ticks = 670
+interval_ticks = 55
+
+[resource]
+script = ExtResource("1_wave")
+id = "wave_08"
+display_name = "Phalanx"
+groups = [SubResource("Group_walkers"), SubResource("Group_wardens"), SubResource("Group_shielded"), SubResource("Group_wardens_2"), SubResource("Group_shielded_2")]

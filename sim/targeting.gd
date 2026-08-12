@@ -16,6 +16,8 @@ static func select(tower, enemies: Array):
 	for enemy in enemies:
 		if not enemy.alive or enemy.reached_goal:
 			continue
+		if enemy.flies and not tower.can_target_air:
+			continue
 		var offset: Vector3 = enemy.position - tower.position
 		var distance_sq: float = offset.x * offset.x + offset.z * offset.z
 		if distance_sq > range_sq:
@@ -33,9 +35,9 @@ static func select(tower, enemies: Array):
 static func _score_for(mode: int, enemy, distance_sq: float) -> float:
 	match mode:
 		Types.TargetMode.FIRST:
-			return enemy.distance_travelled
+			return enemy.progress()
 		Types.TargetMode.LAST:
-			return -enemy.distance_travelled
+			return -enemy.progress()
 		Types.TargetMode.CLOSEST:
 			return -distance_sq
 		Types.TargetMode.STRONGEST:
@@ -43,17 +45,24 @@ static func _score_for(mode: int, enemy, distance_sq: float) -> float:
 		Types.TargetMode.WEAKEST:
 			return -float(enemy.hp)
 		_:
-			return enemy.distance_travelled
+			return enemy.progress()
 
 
 ## Everything alive within `radius` of `centre`, for splash damage.
-static func in_radius(enemies: Array, centre: Vector3, radius: float) -> Array:
+##
+## `include_air` is false for a tower that cannot target air, so a mortar shell
+## landing under a Skiff does not clip it on the way past. Distance is measured
+## on the XZ plane throughout, so cruise altitude never affects who is hit.
+static func in_radius(enemies: Array, centre: Vector3, radius: float,
+		include_air: bool = true) -> Array:
 	var out: Array = []
 	if radius <= 0.0:
 		return out
 	var radius_sq: float = radius * radius
 	for enemy in enemies:
 		if not enemy.alive or enemy.reached_goal:
+			continue
+		if enemy.flies and not include_air:
 			continue
 		var offset: Vector3 = enemy.position - centre
 		if offset.x * offset.x + offset.z * offset.z <= radius_sq:
