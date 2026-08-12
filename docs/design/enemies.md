@@ -27,7 +27,7 @@ Stat blocks are `.tres`-ready. A design rule used twice here and worth naming: *
 
 | | |
 | --- | --- |
-| Stats | **500 HP · speed 9.5 · Light · bounty 10 · leak 1** |
+| Stats | **500 HP · speed 9.5 · Light · bounty 8 · leak 1** — bounty rescaled from the drafted 10 when the whole roster's bounties moved (drone 8→6, walker 14→11, scout 26→21, brute 34→27, in the credit retune); 8 keeps the drafted intent of ~1.3× the drone's rate |
 | Breaks the assumption | "I have time to react." |
 | Punishes | Sniper-heavy builds (a Lance's 1.1s cycle overkills 500 HP and can't keep pace with a stream); builds with no slow. |
 | Answered by | Arc Cannon line fire, any Frost Mortar (a 40% slow hurts speed the most where speed is the stat), Hailstorm. |
@@ -165,16 +165,16 @@ ROADMAP Phase 4 already warns the palette leans on colour alone. Every new enemy
 
 | Source | Credits |
 | --- | --- |
-| Starting credits | 320 |
+| Starting credits | **Crossing's tuned value** — the harness measured the playable window at 560–960; see difficulty.md §7 |
 | Waves 1–5 bounties (shipped data) | 64 + 138 + 204 + 328 + 386 = 1,120 |
 | Wave 6 | 226 |
 | Wave 7 | 274 |
 | Wave 8 | 372 |
 | Wave 9 (incl. 48 from Fission Spawns) | 312 |
 | Wave 10 | 684 |
-| **Campaign total** | **≈ 3,308** |
+| **Campaign total** | **2,988 bounty + the tuned start** |
 
-A fully-maxed six-tower kit (two of each family at tier 3, [upgrades.md](./upgrades.md) prices) costs ~2,840, before the extra base towers any real run buys. Total income is deliberately ~10% short of "everything maxed": spend pressure never disappears, and difficulty.md's ≤ 300 idle-credit target at the wave-10 win stays meaningful. New-enemy bounties were set so waves 6–10 income (1,868) funds roughly two tier-3 completions and change — the fork decisions land in exactly that window.
+The bounty numbers above are **pre-rescale opening bids**: they were drafted when the start was 320, and the harness has since moved the start into the 560–960 window. The design rule they were built to serve is the thing that survives: **total campaign income lands ~10% short of a fully-forked six-tower kit (~2,840 at current [upgrades.md](./upgrades.md) prices) plus a real run's extra base towers, and waves 6–10 income funds roughly two tier-3 completions — the fork decisions land in exactly that window.** Once the balance pass fixes the start (and possibly the cost ladder with it, upgrades.md §9), re-derive the wave 6–10 bounties against that rule; expect them to move down if the start lands high. Idle-credit target at a wave-10 win: ≤ 30% of the tuned start, per difficulty.md §8.
 
 ---
 
@@ -182,7 +182,7 @@ A fully-maxed six-tower kit (two of each family at tier 3, [upgrades.md](./upgra
 
 | Enemy | Blocked by | Note |
 | --- | --- | --- |
-| Courser | nothing | Data + model only. Could ship with the next balance pass; wave 7 just holds until the rest catch up. |
+| Courser | nothing | **Shipped** — def, model and the Corridor's wave list, verified through the full suite plus an end-to-end spawn-count run. |
 | Skiff | 2.5 (air lane, `can_target_air`) | ROADMAP calls flying "the most conspicuous absence" — this is its spec. |
 | Warden | 2.4/2.6 (aura hook) | First ability enemy; the enum lands with it. |
 | Mender | 2.6 (`HEAL_PULSE`, `ENEMY_HEALED`) | Second — reuses the enum, adds the event-pair seam. |

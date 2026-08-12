@@ -1,0 +1,32 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/tower_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "frost_mortar_t2"
+display_name = "Deep Barrel"
+description = "Wider, longer, harder. The smallest tier-two jump in the game, because what it sells is time."
+upgrade_ids = PackedStringArray("frost_mortar_t3a", "frost_mortar_t3b")
+tier = 2
+buildable = false
+cost = 130
+sell_refund_percent = 70
+range_world = 11.0
+damage = 280
+damage_type = 2
+fire_interval_ticks = 62
+fire_mode = 1
+projectile_speed = 27.0
+splash_radius = 4.5
+slow_percent = 40
+slow_ticks = 150
+target_mode = 0
+mesh_path = "res://data/models/towers/frost_mortar_t2.glb"
+mesh_scale = 1.0
+projectile_mesh_path = "res://data/models/projectiles/frost_shell.glb"
+effect_color = Color(0.75, 0.95, 1, 1)
+body_color = Color(0.45, 0.8, 0.85, 1)
+accent_color = Color(0.9, 0.98, 1, 1)
+body_height = 1.4
+barrel_length = 1.1

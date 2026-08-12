@@ -1,0 +1,20 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/enemy_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "courser"
+display_name = "Courser"
+description = "Runs the line at twice a walker's pace. The trick is guns where it will be, not where it was."
+max_hp = 500
+speed = 9.5
+armor_type = 0
+bounty = 8
+leak_damage = 1
+mesh_path = "res://data/models/enemies/courser.glb"
+mesh_scale = 1.0
+shell_node = ""
+body_color = Color(0.95, 0.58, 0.3, 1)
+radius = 0.4
+height = 0.53

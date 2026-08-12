@@ -56,6 +56,12 @@ enum Event {
 	## only so the view layer can free the projectile node. Every projectile must
 	## end in exactly one of PROJECTILE_HIT or PROJECTILE_EXPIRED, or views leak.
 	PROJECTILE_EXPIRED = 16,
+	## A tower became a higher tier in place. Carries the new def_id and tier.
+	## Unlike every other view-affecting event this one MUTATES a view rather
+	## than creating or destroying one, so the autoplay view-count invariant
+	## cannot catch a missing consumer - an unconsumed upgrade is a tier-3 tower
+	## still wearing its tier-1 mesh, and only a human will notice.
+	TOWER_UPGRADED = 17,
 }
 
 enum Phase {

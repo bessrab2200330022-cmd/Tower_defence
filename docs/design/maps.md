@@ -71,20 +71,20 @@ Route usage is wave data (§3), which makes the fork a teaching instrument:
 
 ### 2.5 Gates (F1–F8)
 
-Method as difficulty.md §4: 200 seeds per script, placement fixed. Reference script **S2-Fork**: two Arcs on the head-adjacent pads; after wave 1, a Mortar in the south folds; a mid-band Lance before the first shields and a second by wave 5; per-road Arcs from spare credits; upgrades from wave 6 (Focused mid, Deep Barrel fold); no sells.
+Method as difficulty.md §4, revision 2: quantified **over policy classes, not seeds** — the sim has no seed variance, so every percentage below is an exact count over an enumerated policy set. Reference class **S2-Fork** (a class, not one script), built on difficulty.md §2's composition rules plus this map's own axes: opening spends 75–90% of the wallet across ≥ 2 damage types with Arcs on the head pads; a Mortar in the south folds after wave 1; a mid-band Lance before the first shields and a second by wave 5; per-road Arcs from spare credits; upgrades from wave 6 (Focused mid, Deep Barrel fold); no sells. Class variation: which road gets the first spare Arc, fold-versus-road Mortar placement, and the saving policy.
 
 | # | Gate | Pass condition |
 | --- | --- | --- |
-| F1 | S2-Fork wins | ≥ 85% |
-| F2 | Margin | Median lives at win 10–16; 5th percentile ≥ 5 |
-| F3 | **Thesis: route neglect is lethal** | A one-road-only defence (S2 kit, all on one branch) loses ≥ 95% |
-| F4 | Turtle cap | All towers within range of shared head+tail only → loses ≥ 80% |
-| F5 | Centre is viable, not dominant | Centre-lance S2 variant wins ≥ 85% AND gains ≤ +4 median lives over the road-split variant |
-| F6 | Near-run | Final wave: some enemy passes 70% progress in ≥ 75% of wins |
-| F7 | Spend pressure | Median idle credits at win ≤ 250 |
-| F8 | S1 (mono-kinetic) | Median terminal wave 5–7; never survives past 8 |
+| F1 | S2-Fork wins | ≥ 85% of the class wins |
+| F2 | Margin | Median lives across winning policies 10–16; no winning policy below 5 |
+| F3 | **Thesis: route neglect is lethal** | The one-road-only subclass (S2 composition, all towers on one branch) loses ≥ 95% |
+| F4 | Turtle cap | The subclass keeping every tower in range of only the shared head+tail loses ≥ 80% |
+| F5 | Centre is viable, not dominant | The centre-lance subclass wins ≥ 85% AND gains ≤ +4 median lives over the road-split subclass |
+| F6 | Near-run | Final wave: some enemy passes 70% progress in ≥ 75% of winning policies |
+| F7 | Spend pressure | Median idle credits at win ≤ 30% of the start |
+| F8 | S1 (mono-kinetic class) | Median terminal wave 5–7; no policy in the class survives past 8 |
 
-Starting credits **320** — same wallet as Crossing; the split *is* the difficulty. Starting lives 20.
+Starting credits: **Crossing's tuned value** (the measured 560–960 window — difficulty.md §7). The split, not the wallet, is this map's difficulty. Starting lives 20.
 
 ### 2.6 Biome — snow (brief for A1)
 
@@ -160,20 +160,22 @@ Early waves gentle (income while the player learns pocket triage); mid-campaign 
 
 ### 4.5 Gates (C1–C8)
 
-Reference script **S2-Corridor**: Arc + Lance on the east terrace; Mortar at the arm-2 south pocket; Lance at the arm-2 north pocket upgraded Focused → Prime by mid-campaign (the cross-arm play); Glacier on the west terrace; one flak Arc per terrace by the first Skiff wave; upgrades preferred over new towers throughout (uses 7–9 of 14 pads).
+Method as difficulty.md §4, revision 2 — policy classes, exact counts. Reference class **S2-Corridor**: Arc + Lance on the east terrace; Mortar at the arm-2 south pocket; Lance at the arm-2 north pocket upgraded Focused → Prime by mid-campaign (the cross-arm play); Glacier on the west terrace; one flak Arc per terrace by the first Skiff wave; upgrades preferred over new towers throughout (uses 7–9 of 14 pads). Class variation: pocket triage order, which terrace anchors first, and the saving policy.
 
 | # | Gate | Pass condition |
 | --- | --- | --- |
-| C1 | S2-Corridor wins | ≥ 85% |
-| C2 | Margin | Median lives at win 8–14; 5th percentile ≥ 4 |
-| C3 | **Thesis: width cannot win** | Base-towers-only filling all 14 pads, never upgrading → loses ≥ 90% |
-| C4 | Terraces matter | S2 variant leaving both terraces empty → loses ≥ 70% |
-| C5 | The 14-unit unlock pays | Prime-Focus-at-pocket variant gains ≥ +2 median lives over spending the same credits without it |
-| C6 | Spend pressure | Median idle credits at win ≤ 250 |
-| C7 | S1 (mono-kinetic) | Median terminal wave ≤ 6 |
-| C8 | Near-run | Final wave: some enemy passes 70% progress in ≥ 75% of wins |
+| C1 | S2-Corridor wins | ≥ 85% of the class wins |
+| C2 | Margin | Median lives across winning policies 8–14; no winning policy below 4 |
+| C3 | **Thesis: width cannot win** | The base-towers-only subclass (fills all 14 pads, never upgrades) loses ≥ 90% |
+| C4 | Terraces matter | The subclass leaving both terraces empty loses ≥ 70% |
+| C5 | The 14-unit unlock pays | The Prime-Focus-at-pocket subclass gains ≥ +2 median lives over same-spend members without it |
+| C6 | Spend pressure | Median idle credits at win ≤ 30% of the start |
+| C7 | S1 (mono-kinetic class) | Median terminal wave ≤ 6 |
+| C8 | Near-run | Final wave: some enemy passes 70% progress in ≥ 75% of winning policies |
 
-Starting credits **380** — enough for Lance + two Arcs on turn one (370), because a map with 14 pads should open with a real placement decision, not an Arc and a wait. Starting lives 20.
+Starting credits: **Crossing's tuned value** — 640 as shipped, plus the wave-clear bonus of 12 the retune introduced; both inherited verbatim. The first draft opened the Corridor 60 richer so a Lance-first turn one was affordable at a 320 wallet; the measured window (560–960) makes that opening affordable everywhere, so the differentiator is dead — and on this map the wallet was never the binding constraint anyway. Fourteen pads are. Starting lives 20.
+
+**Shipped note — the map id is `the_corridor`, not `corridor`.** The catalog's `first_map()` sorts map ids and everything downstream (the boot map, and the opening-map smoke test with its hardcoded Crossing build cells) treats the alphabetically-first map as map 1 — and `corridor` sorts before `crossing`. The id is the one in-lane fix, and it happens to scale: `crossing < fork < the_corridor` is exactly campaign order. The durable fix is A3's — an explicit opening-map designation (or the smoke test loading `crossing` by id), after which the id can normalise.
 
 ### 4.6 Biome — desert (brief for A1)
 
@@ -203,4 +205,4 @@ These take minutes to script against the ASCII and they protect load-bearing pro
 2. **`route_hint` defaults to alternate** (−1), so a hint-less wave file exercises both roads. Alternative default (route 0) makes old wave files single-road by surprise on a fork map.
 3. **Snow = Fork, desert = Corridor.** Swappable; the readability arguments (frost legibility, canyon height) travel with the swap and are written above.
 4. **The Corridor's pad count is 14.** This is the scarcity dial: 12 is brutal, 16 is soft. Change it in the layout *and* in check §5.4 together.
-5. **Corridor starts at 380 credits** (Fork stays at Crossing's 320). If map 3 should instead open tight, drop to 320 and expect the opening to be Arc-first and C2's band to slip ~2 lives lower.
+5. **Both maps inherit Crossing's tuned starting credits.** The first draft gave the Corridor +60; the measured economy (560–960 window) made that differentiator meaningless, so it was dropped in revision. Veto by giving either map its own value — but per difficulty.md §7's post-harness rule, anchor it to a credit sweep *on that map*, not to a hunch.

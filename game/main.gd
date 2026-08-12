@@ -52,9 +52,12 @@ func _ready() -> void:
 	hud.sell_mode_toggled.connect(_on_sell_mode_toggled)
 	hud.start_wave_pressed.connect(_on_start_wave_pressed)
 	hud.speed_changed.connect(_on_speed_changed)
+	hud.upgrade_requested.connect(_on_upgrade_requested)
+	hud.tower_sell_requested.connect(_on_sell_requested)
 
 	level.build_requested.connect(_on_build_requested)
 	level.sell_requested.connect(_on_sell_requested)
+	level.tower_inspected.connect(_on_tower_inspected)
 
 
 func _process(delta: float) -> void:
@@ -118,6 +121,7 @@ func _on_build_requested(cell: Vector2i, tower_id: String) -> void:
 	var reason: String = sim.build_blocked_reason(cell, tower_id)
 	if reason != "":
 		hud.flash_message(reason)
+		level.play_denied()
 		return
 	sim.try_build(cell, tower_id)
 
@@ -125,6 +129,32 @@ func _on_build_requested(cell: Vector2i, tower_id: String) -> void:
 func _on_sell_requested(cell: Vector2i) -> void:
 	if not sim.try_sell(cell):
 		hud.flash_message("nothing to sell there")
+		level.play_denied()
+		return
+	# The panel is inspecting a tower that no longer exists.
+	level.clear_selection()
+	hud.close_tower_panel()
+
+
+func _on_tower_inspected(cell: Vector2i) -> void:
+	hud.inspect_tower(cell)
+
+
+## The upgrade command, routed through apply_command rather than through
+## `Simulation.try_upgrade()`, so that when save and replay land it is already in
+## the command log instead of being a second door into the simulation.
+##
+## The refusal message comes from the sim, which is the only thing that knows why
+## - it enforces the ladder rule as well as the price.
+func _on_upgrade_requested(tower_id: int, def_id: String) -> void:
+	var reason: String = ""
+	if sim.has_method("upgrade_blocked_reason"):
+		reason = str(sim.upgrade_blocked_reason(tower_id, def_id))
+	if reason == "" and sim.apply_command(SimulationScript.COMMAND_UPGRADE,
+			{"tower_id": tower_id, "def_id": def_id}):
+		return
+	hud.flash_message(reason if reason != "" else "cannot upgrade that")
+	level.play_denied()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -137,6 +167,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE:
 				level.set_ghost_tower("")
 				level.set_sell_mode(false)
+				level.clear_selection()
 				hud.clear_selection()
 			KEY_1, KEY_2, KEY_3, KEY_4:
 				var index: int = event.keycode - KEY_1

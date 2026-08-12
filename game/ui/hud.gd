@@ -6,8 +6,13 @@ signal tower_selected(tower_id: String)
 signal sell_mode_toggled(enabled: bool)
 signal start_wave_pressed()
 signal speed_changed(multiplier: float)
+## Forwarded straight from the inspection panel. game/main.gd turns these into
+## simulation commands; the HUD itself never touches sim state.
+signal upgrade_requested(tower_id: int, def_id: String)
+signal tower_sell_requested(cell: Vector2i)
 
 const Types := preload("res://sim/sim_types.gd")
+const TowerPanelScript := preload("res://game/ui/tower_panel.gd")
 
 const PHASE_LABELS := ["Build", "Combat", "Victory", "Defeat"]
 const SPEED_OPTIONS := [0.0, 1.0, 2.0, 4.0]
@@ -24,6 +29,8 @@ var _message_label: Label
 var _outcome_label: Label
 var _start_button: Button
 var _sell_button: Button
+
+var _tower_panel: PanelContainer
 
 var _tower_buttons: Array[Button] = []
 var _tower_ids: Array = []
@@ -45,7 +52,47 @@ func build(simulation, catalog_ref) -> void:
 	_build_top_bar(root)
 	_build_build_bar(root)
 	_build_right_controls(root)
+	_build_tower_panel(root)
 	_build_messages(root)
+
+
+## The inspection panel sits on the left, clear of the build bar along the
+## bottom and the speed controls on the right. It is hidden until a tower is
+## clicked, so it costs nothing when nothing is selected.
+func _build_tower_panel(root: Control) -> void:
+	var holder := MarginContainer.new()
+	holder.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	holder.offset_left = 16.0
+	holder.offset_top = 64.0
+	holder.offset_right = 340.0
+	holder.offset_bottom = -104.0
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(holder)
+
+	var align := VBoxContainer.new()
+	align.alignment = BoxContainer.ALIGNMENT_BEGIN
+	align.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(align)
+
+	_tower_panel = TowerPanelScript.new()
+	_tower_panel.name = "TowerPanel"
+	align.add_child(_tower_panel)
+	_tower_panel.build(sim, catalog)
+	_tower_panel.upgrade_requested.connect(
+		func(tower_id: int, def_id: String) -> void: upgrade_requested.emit(tower_id, def_id))
+	_tower_panel.sell_requested.connect(
+		func(cell: Vector2i) -> void: tower_sell_requested.emit(cell))
+
+
+## Called by game/main.gd when game/level.gd reports a tower was clicked.
+func inspect_tower(cell: Vector2i) -> void:
+	if _tower_panel != null:
+		_tower_panel.inspect(cell)
+
+
+func close_tower_panel() -> void:
+	if _tower_panel != null:
+		_tower_panel.close()
 
 
 func _build_top_bar(root: Control) -> void:
@@ -177,6 +224,9 @@ func refresh() -> void:
 		_:
 			_outcome_label.text = ""
 
+	if _tower_panel != null:
+		_tower_panel.refresh()
+
 	if _message_ttl > 0.0:
 		_message_ttl -= get_process_delta_time()
 		if _message_ttl <= 0.0:
@@ -191,6 +241,7 @@ func flash_message(text: String, seconds: float = 1.6) -> void:
 func clear_selection() -> void:
 	_selected_index = -1
 	_sell_mode = false
+	close_tower_panel()
 	for button in _tower_buttons:
 		button.button_pressed = false
 	_sell_button.button_pressed = false

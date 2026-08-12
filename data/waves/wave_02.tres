@@ -6,9 +6,9 @@
 [sub_resource type="Resource" id="Group_drones"]
 script = ExtResource("2_group")
 enemy_id = "drone"
-count = 12
+count = 10
 start_delay_ticks = 0
-interval_ticks = 30
+interval_ticks = 34
 
 [sub_resource type="Resource" id="Group_walkers"]
 script = ExtResource("2_group")

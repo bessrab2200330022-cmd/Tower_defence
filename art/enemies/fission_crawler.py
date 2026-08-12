@@ -77,8 +77,14 @@ def build_segment(name, parent, offset_y, mats, scale=1.0, seam_face=0.0):
     """
     pod_z = 0.50 * scale
 
+    # The pod takes the bare prefix, so the leading segment's is named exactly
+    # "Body". Verified against game/views/enemy_view.gd: _setup_from_mesh sets
+    # `body = model` - the imported ROOT - so the chill squash and heading
+    # rotation work regardless of what the children are called, and this model
+    # rendered correctly without it. Named anyway: the enemy contract asks for
+    # a Body node, it costs one line, and the symmetry with BodyRear survives.
     pod = studio.sphere(
-        "%sPod" % name, radius=0.34 * scale, subdivisions=1,
+        name, radius=0.34 * scale, subdivisions=1,
         parent=parent, location=(0.0, offset_y, pod_z), material=mats["shell"],
         scale=(1.0, 0.82, 0.95),
     )

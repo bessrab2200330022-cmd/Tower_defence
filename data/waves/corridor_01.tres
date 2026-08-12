@@ -1,0 +1,17 @@
+[gd_resource type="Resource" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 8
+start_delay_ticks = 0
+interval_ticks = 48
+
+[resource]
+script = ExtResource("1_wave")
+id = "corridor_01"
+display_name = "Dry Run"
+groups = [SubResource("Group_drones")]

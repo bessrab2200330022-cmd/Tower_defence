@@ -80,6 +80,18 @@ Existing four: shipped text stands. New six ([enemies.md](./enemies.md) stat blo
 
 Waves 1–5 are shipped and stand. *Breakthrough* (5) and *Breakwater* (10) are a deliberate echo — the mid-term and the final. Map: **The Crossing** (shipped). Reserved for the backlog's next two maps: **The Corridor** (the long single lane), **The Fork** (the split route).
 
+**The Corridor's own ten waves** (shipped with the map) take their names from the dead river that cut the canyon — dry-country words, operational like the Crossing's:
+
+| Wave | Name | | Wave | Name |
+| --- | --- | --- | --- | --- |
+| 1 | Dry Run | | 6 | Static |
+| 2 | Silt | | 7 | Undertow |
+| 3 | Glare | | 8 | Bedrock |
+| 4 | **Flash Flood** | | 9 | Scree |
+| 5 | Grindstone | | 10 | **Watershed** |
+
+*Flash Flood* is the Courser's debut, and the name is the tutorial: the one thing that still moves fast through a slot canyon. *Watershed* is the finale — the decisive point, in a canyon a river made.
+
 ---
 
 ## 6. UI copy

@@ -14,11 +14,11 @@ A vertical slice with an unusually solid foundation, a surprisingly complete loo
 
 **Visually further along than the code suggests.** Every model is a Python script in `art/` exported to `.glb`; the board, the floating island and its scatter are assembled procedurally from the same ASCII layout the pathfinder walks; lighting runs a full Forward+ stack. This was the last two weeks of work and it is largely done.
 
-**Thin where it counts.** One map, three towers, four enemy types, five waves. No audio, no save, no menu, no upgrades, no status system beyond a hardcoded slow.
+**Thin where it counts.** One map, three towers, four enemy types, five waves. No save, no menu, no upgrades, no status system beyond a hardcoded slow.
 
-**Unbalanced, and now measurably so.** `tests/run_autoplay.gd` plays the campaign with a naive build order and loses on wave 3 with four towers standing. That is one data point from one build order, not a verdict — but it is the first real signal the project has produced about its own difficulty, and it says the numbers have never been tuned against anything.
+**Balanced against a written target, once.** *Superseded, 12 Aug 2026 — the paragraph here previously said "unbalanced, and now measurably so", citing autoplay losing on wave 3 with four towers standing.* Phase 0 shipped in full: the harness (`tests/run_balance.gd`) enumerates the policy space, `difficulty.md` §4 states nine gates over it, and the first balance pass took them from 1 of 9 passing to 8 of 9. The wave-3 story was wrong — the wallet was the problem, not the tower mix. See BACKLOG's Done list for the findings, which are the most load-bearing paragraphs in the project.
 
-That last point drives the ordering below. **There is no sense adding towers to a game whose existing three have never been measured against each other.**
+The ordering below still holds for the same reason it always did: **there is no sense adding towers to a game whose existing three have not been measured against each other.** They now have been, once, on one map. That does not survive the second map or the upgrade ladder without re-running.
 
 ---
 
@@ -28,7 +28,9 @@ An earlier version of this file listed much of the following as future work. It 
 
 **Foundation:** deterministic sim, fixed timestep, seeded RNG, integer money and damage, event-queue view layer, 10 test suites, view-layer autoplay gate, CI.
 
-**Art pipeline:** procedural Blender models exported to `.glb`, no `.blend` files. Three towers, four enemies, one projectile, a terrain kit and eight scatter props. `mesh_path` on `TowerDef`/`EnemyDef` with a primitive fallback — this was the architectural unlock that made art and code independent.
+**Art pipeline:** procedural Blender models exported to `.glb`, no `.blend` files. **17 scripts, 33 `.glb`** as of 12 Aug: three towers, **nine enemies**, one projectile, a terrain kit, eight grassland scatter props and **an eight-piece snow kit**. `mesh_path` on `TowerDef`/`EnemyDef` with a primitive fallback — this was the architectural unlock that made art and code independent, and it is why five modelled enemies can sit on disk with no defs without anything being red.
+
+**Audio:** synthesised at load into `AudioStreamWAV` — no binary sound assets in the repo. Fixed 20-voice pool driven off the event queue.
 
 **Board:** procedural assembly from `.layout.txt`, floating island with stepped underside and roots, six satellite islands, three waterfalls, orbiting cloud deck with a geometric keep-out from the island and the camera.
 
@@ -40,25 +42,27 @@ An earlier version of this file listed much of the following as future work. It 
 
 ---
 
-## Phase 0 — Learn what the game currently is
+## Phase 0 — Learn what the game currently is — ✅ COMPLETE (12 Aug 2026)
 
-Cheap, unglamorous, and it makes every later decision better. Nothing here ships to a player. **Everything downstream is guesswork until it exists.**
+**Do not rebuild any of this.** All four items shipped. Kept here with their outcomes because the *findings* are the point, not the tick.
 
-### 0.1 Balance harness
-`tests/run_autoplay.gd` is already 80% of one: it sets up a sim, buys towers, runs waves and reports. Parameterise it — seed, map, build order, tower mix — loop a few hundred matches, and report win rate, average wave reached, credits idle at the end, and damage dealt per tower type.
+### 0.1 Balance harness — ✅ `tests/run_balance.gd`, run via `scripts/balance.sh` / `.bat`
+Enumerates the policy space (build order × placement × saving policy) across S1/S2/S3 classes and checks difficulty.md's nine gates. Deliberately **not** in CI: it is an instrument, not a gate, and exits non-zero only when the harness itself could not run.
 
-Only possible because the sim is deterministic and headless. It converts every later balance question from an argument into a measurement.
+Two things it taught about measurement, both worth more than the numbers: **seed is not an axis** — `sim/rng.gd` is never drawn from, so matches differing only by seed are byte-identical and averaging over them reports fake confidence; and **nominal DPS is the wrong instrument** — what decides a match is *shots per transit*, a small integer that moves in steps, not a sustained rate.
 
-**Expected finding:** the Arc Cannon is over-efficient. At roughly 25 nominal DPS per 100 credits against the Plasma Lance's 16, it likely dominates every matchup where the armour multiplier gap is under about 1.6×.
+The "expected finding" this section used to carry (Arc Cannon over-efficient at ~25 DPS/100cr) was directionally right and mechanically wrong: per 100 credits the Arc led 250 to the Lance's 163, but one Arc Cannon could not solo a 600 HP drone in a full pass.
 
-### 0.2 Instrument the damage table
-Report effective DPS for every tower × armour pair from the harness. The 10× damage scale makes the multipliers land honestly now; verify the table's *intent* survives contact with real fire rates and ranges.
+### 0.2 Instrument the damage table — ✅
+Effective DPS per tower × armour pair now comes out of the harness. G8 (energy ≥ 3× kinetic vs Shielded) is checked from measured numbers.
 
-### 0.3 Difficulty target
-Decide, in writing, what wave 5 should feel like and what a competent player's life total should be at the end. Without a target, "balanced" is unfalsifiable. This is a design decision, not a measurement.
+**Still missing one column:** `difficulty.md` §5 directs the harness to report **added exposure-seconds** per tower — the extra time enemies spend inside *other* towers' range because of a slow. Until that lands, the Frost Mortar's actual product is invisible to every report and it will always score as decoration. Open, assigned to A3.
 
-### 0.4 First balance pass
-Tune against the harness. Report before/after numbers, not impressions.
+### 0.3 Difficulty target — ✅ `docs/design/difficulty.md`, revision 2
+Nine gates (G1–G9), quantified over **policy classes** rather than seeds. Revision 2 exists because the harness disagreed with revision 1 twice and was right both times.
+
+### 0.4 First balance pass — ✅ 1 of 9 gates → 8 of 9
+The fix was never one number. See BACKLOG's Done list.
 
 ---
 
@@ -66,23 +70,27 @@ Tune against the harness. Report before/after numbers, not impressions.
 
 The cheapest transformation available. None of it needs an artist, and it is where the remaining gap between "tech demo" and "game" actually lives.
 
-### 1.1 Render interpolation
-The sim steps at 60 Hz; on a 144 Hz display everything visibly stutters. Lerp view positions in `level.gd::sync()` using the accumulator remainder from `main.gd`, keeping the previous position in the view node and never in `sim/`. **Must not change `snapshot_hash()` — that is the test.**
+**Five of eight shipped (12 Aug 2026): 1.1, 1.2, 1.3, 1.4 and the first half of 1.6.** Remaining: 1.5, the chill visual, 1.7, 1.8.
 
-### 1.2 Audio
-Ranks here, not in Phase 4. A tower defence with no fire, impact or death sound feels broken in a way players will not articulate — they will just call it unfinished. An `AudioStreamPlayer` pool driven off the event queue that already exists. Entirely in `game/`; audio must never affect sim state.
+### 1.1 Render interpolation — ✅
+`main.gd` captures inside the step loop and passes the accumulator remainder into `sync()`. Largest single-frame movement on a tracked enemy went from 2.41× the mean at 144 Hz (4.00× at 240 Hz) to 1.00× at both. `snapshot_hash()` untouched over 900 ticks.
 
-### 1.3 Selection and hover feedback
-An outline on the hovered cell and the selected tower. Today the only feedback is the ghost box.
+### 1.2 Audio — ✅
+`game/audio/` — a `SoundBank` that *synthesises* every sound into an `AudioStreamWAV` at load (~40 ms, ~135 KB, no binary assets to review) and an `AudioDirector` mapping drained events onto a fixed 20-voice pool. Placeholders, and a recipe like "190 Hz falling to 70 over 130 ms" is reviewable in a way a `.ogg` is not. The trap it left behind — deferred `AudioStreamPlayback` release under the Dummy driver leaking ObjectDB instances at exit — is written up in BACKLOG's Done list and is the reason the gate now runs three times.
 
-### 1.4 Range ring shader
-Replace the `TorusMesh` with a flat radial shader — crisper, no z-fighting, and it can pulse when placement is invalid.
+### 1.3 Selection and hover feedback — ✅
+Corner brackets rather than a closed outline (the board is already full of terrain-slab seams). Emits `tower_inspected(cell)`, which nothing consumes yet — deliberately, it is the hook 2.3 hangs off.
+
+### 1.4 Range ring shader — ✅
+The `TorusMesh` is gone. A quad lifted 0.09 above the ground with a radial shader, which cannot z-fight by construction.
 
 ### 1.5 Path flow indication
-Scroll a UV on the path material so the route reads as directional at a glance. Solves a real readability problem on the serpentine map.
+Scroll a UV on the path material so the route reads as directional at a glance. Solves a real readability problem on the serpentine map. **Not started.**
 
-### 1.6 Damage numbers and chill visual
-`ENEMY_DAMAGED` already carries amount, hp and position, so no sim change is needed. The Frost Mortar's 40% slow currently reads as a 15% squash; it deserves a colour shift.
+### 1.6 Damage numbers and chill visual — 🟡 half
+Floating numbers shipped: a 28-strong `Label3D` pool, hand-ticked on the render delta, with hits ≥ 22% of max HP drawn larger and warmer. **The chill visual has not** — the Frost Mortar's 40% slow still reads as a 15% squash and deserves a colour shift.
+
+**Open design question from the shipped half:** the numbers print the raw 10× value, so a 2.7-damage hit reads as "272", matching the HUD's "225 dps". `DISPLAY_DIVISOR` in `damage_numbers.gd` is the single place to change it. A2 should rule on whether the 10× scale is visible to the player at all — it is a voice decision as much as a UI one, and it wants answering before the number appears in a trailer.
 
 ### 1.7 GPUParticles3D
 Migrate `effects.gd` from hand-rolled pooling. **Keep the pooling discipline** — nothing may leak when the game is paused or at 4× speed, which is exactly why the current version is hand-ticked.
@@ -130,8 +138,10 @@ A manually triggered ability on a cooldown. Adds a skill ceiling and a moment-to
 
 Only now, once the mechanics make content worth designing around.
 
-### 3.1 Save and load
-Save = seed + map id + ordered command log. Load = replay it. Possible *because* the sim is deterministic, and far more robust than serialising entity state. Needs `Simulation.apply_command()` so replay and live input share one path — which also unblocks 2.8 and 3.4.
+### 3.1 Save and load — 🟡 the hard half already shipped
+`Simulation.apply_command(action, args)` exists: `try_build` / `try_sell` / `start_next_wave` / `set_target_mode` are now thin wrappers over one door, so the command vocabulary is already an on-disk format (renaming one invalidates every save — treat them as a format, not as identifiers). **2.8 and 3.4 are unblocked.**
+
+What remains is only serialisation: write `{seed, map_id, [{tick, action, args}]}` to disk and replay it on load. Note how the refactor was verified, because it generalises — the pre-refactor `snapshot_hash()` sequence was captured *first* and pinned as constants in `test_command_log.gd`. `test_determinism.gd` compares a run against *itself* and therefore cannot notice a behaviour change at all; the pinned sequence can. Negative control: reintroducing a one-point damage change is caught by tick 100 while the determinism suite stays green.
 
 ### 3.2 Multi-path maps
 A fork is where `PathFinder` stops being trivially correct: equal-distance routes need a deterministic tie-break, and towers can no longer cover everything. Do it after 2.4 and 2.5 so the new map has mechanics worth designing around.
@@ -181,6 +191,10 @@ Four traps worth naming, because all four have already happened once in this rep
 
 ## If you only do three things
 
-1. **Balance harness (0.1).** Everything downstream is guesswork without it, and the instrument already half-exists.
-2. **Interpolation and audio (1.1, 1.2).** The cheapest possible transformation of how the game feels, neither requiring an artist.
-3. **Status effects and flying enemies (2.4, 2.5).** The two mechanics that turn the existing three towers from a sum into a decision.
+*Revised 12 Aug 2026 — the first two of the previous three shipped. Kept below the line for the record.*
+
+1. **InputMap migration (2.1), then tower upgrades (2.2).** In that order and for a mechanical reason: upgrades add a hotkey, and every binding added before the migration doubles its cost. `upgrades.md` has already made the branching call and specified all nine defs, so 2.2 is spec-complete and waiting.
+2. **Tower inspection (2.3).** Five targeting modes are implemented, validated, and reachable from no UI. `tower_inspected(cell)` is already emitted and consumed by nothing. This is the cheapest real depth in the project and it got cheaper overnight.
+3. **Status effects and flying enemies (2.4, 2.5).** The two mechanics that turn the existing three towers from a sum into a decision. 2.4 first — 2.6 and 3.3 both lean on the same schema, and building them in the wrong order means designing it twice.
+
+*Done: balance harness (0.1); interpolation and audio (1.1, 1.2).*

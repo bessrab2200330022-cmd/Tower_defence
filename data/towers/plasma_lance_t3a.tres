@@ -1,0 +1,32 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/tower_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "plasma_lance_t3a"
+display_name = "Prime Focus"
+description = "One target, maximally dead. Its tax is overkill: the worst tower in the game against a swarm, and the answer to anything with a health bar worth naming."
+upgrade_ids = PackedStringArray()
+tier = 3
+buildable = false
+cost = 220
+sell_refund_percent = 70
+range_world = 16.0
+damage = 1180
+damage_type = 1
+fire_interval_ticks = 90
+fire_mode = 0
+projectile_speed = 60.0
+splash_radius = 0.0
+slow_percent = 0
+slow_ticks = 0
+target_mode = 3
+mesh_path = "res://data/models/towers/plasma_lance_t3a.glb"
+mesh_scale = 1.0
+projectile_mesh_path = ""
+effect_color = Color(0.55, 0.85, 1, 1)
+body_color = Color(0.55, 0.4, 0.9, 1)
+accent_color = Color(0.95, 0.75, 1, 1)
+body_height = 2.3
+barrel_length = 1.9

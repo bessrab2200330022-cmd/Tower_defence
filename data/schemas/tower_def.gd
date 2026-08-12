@@ -7,7 +7,26 @@ extends Resource
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 
+@export_group("Upgrades")
+## Def ids purchasable from this one. One entry is a linear step, two entries are
+## a fork. Each tier is a full def carrying complete stats - an upgraded tower
+## simply *is* its new def, with no deltas and no inheritance to resolve.
+## Catalog.validate() rejects an entry naming a def that does not exist; that
+## check is the whole safety net for a data-driven upgrade tree.
+@export var upgrade_ids: PackedStringArray = PackedStringArray()
+## 1 for a base tower, 2 and 3 for upgrade tiers. Carried on TOWER_UPGRADED so
+## the view can pick a tier silhouette without re-deriving it from the id.
+@export_range(1, 3, 1) var tier: int = 1
+## Whether this def can be bought directly from the build bar. Upgrade tiers set
+## this false: they live in the same directory and load through the same catalog,
+## but their `cost` is the UPGRADE INCREMENT, so a directly purchasable tier-3
+## would sell the whole ladder for the price of its last rung.
+@export var buildable: bool = true
+
 @export_group("Cost")
+## For a base tower this is the purchase price. For an upgrade tier it is the
+## increment paid on top of everything already invested - see upgrades.md 4-6,
+## where the tables give both the increment and the running total.
 @export var cost: int = 100
 @export_range(0, 100, 1) var sell_refund_percent: int = 70
 
@@ -65,4 +84,9 @@ func is_valid() -> String:
 		return "tower '%s' has fire_interval_ticks < 1" % id
 	if range_world <= 0.0:
 		return "tower '%s' has non-positive range" % id
+	if upgrade_ids.size() > 2:
+		return "tower '%s' offers %d upgrades; the design is one linear step or a two-way fork" % [id, upgrade_ids.size()]
+	for upgrade_id in upgrade_ids:
+		if str(upgrade_id) == id:
+			return "tower '%s' lists itself as an upgrade" % id
 	return ""

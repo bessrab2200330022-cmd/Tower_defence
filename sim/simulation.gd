@@ -23,9 +23,6 @@ const EnemyScript := preload("res://sim/entities/enemy_state.gd")
 const TowerScript := preload("res://sim/entities/tower_state.gd")
 const ProjectileScript := preload("res://sim/entities/projectile_state.gd")
 
-## Awarded when a wave is fully cleared, on top of individual bounties.
-const WAVE_CLEAR_BONUS: int = 25
-
 ## Command names accepted by `apply_command`. These are the on-disk vocabulary of
 ## a saved command log, so renaming one invalidates every save and replay - treat
 ## them as a format, not as internal identifiers.
@@ -33,6 +30,7 @@ const COMMAND_BUILD := "build"
 const COMMAND_SELL := "sell"
 const COMMAND_START_WAVE := "start_wave"
 const COMMAND_SET_TARGET_MODE := "set_target_mode"
+const COMMAND_UPGRADE := "upgrade"
 
 var tick: int = 0
 var phase: int = Types.Phase.BUILD
@@ -177,6 +175,13 @@ func apply_command(action: String, args: Dictionary = {}) -> bool:
 			if not _arg_is_cell(args, "cell") or not _arg_is_int(args, "mode"):
 				return false
 			return _do_set_target_mode(args["cell"], args["mode"])
+		COMMAND_UPGRADE:
+			# Addressed by tower id rather than cell, unlike build and sell. That
+			# is the lead's contract; A4's panel already has the tower selected
+			# when the button is pressed, so it has the id and not the cell.
+			if not _arg_is_int(args, "tower_id") or not _arg_is_text(args, "def_id"):
+				return false
+			return _do_upgrade(args["tower_id"], str(args["def_id"]))
 	return false
 
 
@@ -217,19 +222,62 @@ func set_target_mode(cell: Vector2i, mode: int) -> bool:
 	return apply_command(COMMAND_SET_TARGET_MODE, {"cell": cell, "mode": mode})
 
 
-func _do_build(cell: Vector2i, tower_id: String) -> bool:
-	if build_blocked_reason(cell, tower_id) != "":
+func try_upgrade(tower_id: int, def_id: String) -> bool:
+	return apply_command(COMMAND_UPGRADE, {"tower_id": tower_id, "def_id": def_id})
+
+
+## Why an upgrade would be refused, as a message. Empty string means "allowed".
+## Mirrors build_blocked_reason so the UI can grey a button with a reason
+## attached rather than discovering the refusal by pressing it.
+func upgrade_blocked_reason(tower_id: int, def_id: String) -> String:
+	if is_over():
+		return "the match is over"
+	var tower = _tower_by_id(tower_id)
+	if tower == null:
+		return "no tower with id %d" % tower_id
+	var current = catalog.get_tower(tower.def_id)
+	if current == null:
+		return "tower %d has unknown def '%s'" % [tower_id, tower.def_id]
+	if not current.upgrade_ids.has(def_id):
+		# Deliberately strict: only a tier the CURRENT def offers. That is what
+		# stops a replayed or hand-written command jumping the ladder straight
+		# to a tier 3 for one increment.
+		return "'%s' is not an upgrade of '%s'" % [def_id, tower.def_id]
+	var next_def = catalog.get_tower(def_id)
+	if next_def == null:
+		return "unknown tower '%s'" % def_id
+	if not economy.can_afford(next_def.cost):
+		return "not enough credits"
+	return ""
+
+
+func _do_upgrade(tower_id: int, def_id: String) -> bool:
+	if upgrade_blocked_reason(tower_id, def_id) != "":
 		return false
-	var def = catalog.get_tower(tower_id)
-	if not economy.spend(def.cost):
+	var tower = _tower_by_id(tower_id)
+	var next_def = catalog.get_tower(def_id)
+	if not economy.spend(next_def.cost):
 		return false
 
-	var tower = TowerScript.new()
-	tower.id = _next_tower_id
-	_next_tower_id += 1
+	# Bought in place: id, cell, position, facing and the tower's record of what
+	# it has done all survive. Only the stats change, because an upgraded tower
+	# simply *is* its new def.
+	tower.credits_invested += next_def.cost
+	_apply_def_to_tower(tower, next_def)
+
+	_emit(Types.Event.TOWER_UPGRADED, {
+		"tower_id": tower.id,
+		"def_id": tower.def_id,
+		"tier": int(next_def.tier),
+	})
+	_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
+	return true
+
+
+## The single place a TowerDef's stats are copied onto a TowerState, shared by
+## build and upgrade so a field added to one can never be forgotten by the other.
+func _apply_def_to_tower(tower, def) -> void:
 	tower.def_id = str(def.id)
-	tower.cell = cell
-	tower.position = grid.cell_to_world(cell)
 	tower.range_world = def.range_world
 	tower.damage = def.damage
 	tower.damage_type = def.damage_type
@@ -240,7 +288,26 @@ func _do_build(cell: Vector2i, tower_id: String) -> bool:
 	tower.slow_percent = def.slow_percent
 	tower.slow_ticks = def.slow_ticks
 	tower.target_mode = def.target_mode
+	# A cooldown already ticking was measured against the OLD interval. Clamping
+	# stops an upgrade to a faster gun from being a temporary downgrade, without
+	# handing out a free instant shot the way resetting to zero would.
+	tower.cooldown_ticks = mini(tower.cooldown_ticks, tower.fire_interval_ticks)
+
+
+func _do_build(cell: Vector2i, tower_id: String) -> bool:
+	if build_blocked_reason(cell, tower_id) != "":
+		return false
+	var def = catalog.get_tower(tower_id)
+	if not economy.spend(def.cost):
+		return false
+
+	var tower = TowerScript.new()
+	tower.id = _next_tower_id
+	_next_tower_id += 1
+	tower.cell = cell
+	tower.position = grid.cell_to_world(cell)
 	tower.credits_invested = def.cost
+	_apply_def_to_tower(tower, def)
 
 	towers.append(tower)
 	_tower_by_cell[cell] = tower
@@ -382,7 +449,14 @@ func _step_enemies(delta: float) -> void:
 		if enemy.path_index >= waypoints.size():
 			enemy.reached_goal = true
 			var lost: int = economy.lose_lives(enemy.leak_damage)
-			_emit(Types.Event.ENEMY_LEAKED, {"enemy_id": enemy.id, "lives_lost": lost})
+			# def_id rides along because the enemy is compacted away this same
+			# tick - without it a listener has to mirror every ENEMY_SPAWNED to
+			# find out what just leaked.
+			_emit(Types.Event.ENEMY_LEAKED, {
+				"enemy_id": enemy.id,
+				"def_id": enemy.def_id,
+				"lives_lost": lost,
+			})
 			_emit(Types.Event.LIVES_CHANGED, {"lives": economy.lives})
 
 
@@ -570,8 +644,9 @@ func _resolve_phase() -> void:
 	if not wave_director.spawning_finished() or not enemies.is_empty():
 		return
 
-	economy.earn(WAVE_CLEAR_BONUS)
-	_emit(Types.Event.WAVE_CLEARED, {"wave_index": wave_director.wave_index, "bonus": WAVE_CLEAR_BONUS})
+	var bonus: int = maxi(map_def.wave_clear_bonus, 0)
+	economy.earn(bonus)
+	_emit(Types.Event.WAVE_CLEARED, {"wave_index": wave_director.wave_index, "bonus": bonus})
 	_emit(Types.Event.CREDITS_CHANGED, {"credits": economy.credits})
 
 	if wave_director.has_next_wave():
@@ -623,10 +698,20 @@ func snapshot_hash() -> int:
 		h = _mix(h, enemy.id)
 		h = _mix(h, enemy.hp)
 		h = _mix(h, int(round(enemy.distance_travelled * 1000.0)))
+		# Status must be hashed, not inferred. A slow only shows up in
+		# distance_travelled a tick later and cancels out entirely if it expires
+		# between samples, so without these two a status bug can travel a whole
+		# match invisibly - and status effects are about to become a stack.
+		h = _mix(h, enemy.slow_percent)
+		h = _mix(h, enemy.slow_ticks_left)
 	for tower in towers:
 		h = _mix(h, tower.id)
 		h = _mix(h, tower.cooldown_ticks)
 		h = _mix(h, tower.damage_dealt)
+		# The tower's current tier IS its def id. Without this a replayed upgrade
+		# diverges silently: the credits are spent identically, so the economy
+		# matches, and only the damage numbers drift a few ticks later.
+		h = _mix_text(h, tower.def_id)
 	for projectile in projectiles:
 		h = _mix(h, projectile.id)
 		h = _mix(h, int(round(projectile.position.x * 1000.0)))
@@ -637,3 +722,13 @@ func snapshot_hash() -> int:
 static func _mix(h: int, value: int) -> int:
 	var mixed: int = (h ^ value) & 0xFFFFFFFF
 	return (mixed * 16777619) & 0xFFFFFFFF
+
+
+## Folds a string byte by byte rather than calling String.hash(), whose
+## algorithm is an engine implementation detail and not promised to be stable
+## across Godot versions. Determinism here has to outlive an engine upgrade.
+static func _mix_text(h: int, text: String) -> int:
+	var mixed: int = h
+	for byte in text.to_utf8_buffer():
+		mixed = _mix(mixed, int(byte))
+	return mixed

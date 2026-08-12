@@ -26,6 +26,10 @@ extends Resource
 @export_group("Rules")
 @export var starting_credits: int = 300
 @export var starting_lives: int = 20
+## Paid on top of individual bounties when a wave is fully cleared. Lives here
+## rather than as a constant in `sim/simulation.gd` because it is balance, and
+## balance belongs in data where the harness can sweep it.
+@export var wave_clear_bonus: int = 25
 @export var wave_ids: PackedStringArray = PackedStringArray()
 
 @export_group("Presentation")
@@ -61,6 +65,8 @@ func is_valid() -> String:
 		return "map '%s' has no wave_ids" % id
 	if cell_size <= 0.0:
 		return "map '%s' has non-positive cell_size" % id
+	if wave_clear_bonus < 0:
+		return "map '%s' has a negative wave_clear_bonus" % id
 	if layout_path != "" and not FileAccess.file_exists(layout_path):
 		return "map '%s' layout_path '%s' does not exist" % [id, layout_path]
 

@@ -6,23 +6,23 @@
 [sub_resource type="Resource" id="Group_drones"]
 script = ExtResource("2_group")
 enemy_id = "drone"
-count = 16
+count = 20
 start_delay_ticks = 0
-interval_ticks = 22
+interval_ticks = 19
 
 [sub_resource type="Resource" id="Group_shielded"]
 script = ExtResource("2_group")
 enemy_id = "shielded_scout"
-count = 6
-start_delay_ticks = 180
-interval_ticks = 60
+count = 10
+start_delay_ticks = 150
+interval_ticks = 48
 
 [sub_resource type="Resource" id="Group_brutes"]
 script = ExtResource("2_group")
 enemy_id = "brute"
-count = 3
-start_delay_ticks = 300
-interval_ticks = 150
+count = 5
+start_delay_ticks = 260
+interval_ticks = 120
 
 [resource]
 script = ExtResource("1_wave")

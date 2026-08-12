@@ -83,7 +83,21 @@ func get_map(id: String):
 	return maps.get(id, null)
 
 
+## Ids for the build bar: base towers only. Upgrade tiers are loaded and
+## addressable through get_tower(), but they are not purchasable directly - their
+## `cost` is an increment, not a price.
 func tower_ids() -> Array:
+	var ids: Array = []
+	for id in towers:
+		if towers[id].buildable:
+			ids.append(id)
+	ids.sort()
+	return ids
+
+
+## Every tower def including upgrade tiers. For validation, tests and tooling
+## that needs the whole ladder rather than the shop window.
+func all_tower_ids() -> Array:
 	var ids: Array = towers.keys()
 	ids.sort()
 	return ids
@@ -108,6 +122,15 @@ func validate() -> PackedStringArray:
 		var message: String = towers[id].is_valid()
 		if message != "":
 			problems.append(message)
+		# The whole safety net for a data-driven upgrade tree: a tier id that
+		# does not resolve would otherwise surface as an upgrade button that
+		# silently does nothing, at whatever wave the player first pressed it.
+		for upgrade_id in towers[id].upgrade_ids:
+			if not towers.has(str(upgrade_id)):
+				problems.append("tower '%s' lists unknown upgrade '%s'" % [id, str(upgrade_id)])
+			elif towers[str(upgrade_id)].buildable:
+				problems.append("tower '%s' lists '%s' as an upgrade, but it is still marked buildable"
+					% [id, str(upgrade_id)])
 	for id in enemies:
 		var message: String = enemies[id].is_valid()
 		if message != "":

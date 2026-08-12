@@ -330,3 +330,63 @@ func test_step_is_inert_once_the_match_is_over() -> void:
 	var frozen_tick: int = sim.tick
 	_advance(sim, 30)
 	assert_eq(sim.tick, frozen_tick, "time must stop after the match ends")
+
+
+# ---------------------------------------------------------------------------
+# Wave clear bonus - balance, so it lives on the map rather than in this file
+# ---------------------------------------------------------------------------
+
+func _clear_the_wave(sim) -> Dictionary:
+	sim.try_build(BUILD_CELL, "test_tower")
+	sim.start_next_wave()
+	for i in 400:
+		sim.step()
+		for event in sim.drain_events():
+			if int(event["type"]) == Types.Event.WAVE_CLEARED:
+				return event
+	return {}
+
+
+func test_wave_clear_bonus_comes_from_the_map() -> void:
+	var catalog = Fixtures.make_catalog({"damage": 200, "range_world": 8.0}, {},
+		[Fixtures.make_group("test_enemy", 1, 0, 30)], {"wave_clear_bonus": 77})
+	var sim = SimulationScript.new()
+	assert_true(sim.setup(catalog.first_map(), catalog, 1), sim.setup_error)
+	var event: Dictionary = _clear_the_wave(sim)
+	assert_false(event.is_empty(), "the wave should have cleared")
+	assert_eq(int(event["bonus"]), 77, "the bonus must be read from MapDef, not hardcoded")
+
+
+func test_a_zero_wave_clear_bonus_is_allowed() -> void:
+	var catalog = Fixtures.make_catalog({"damage": 200, "range_world": 8.0}, {},
+		[Fixtures.make_group("test_enemy", 1, 0, 30)], {"wave_clear_bonus": 0})
+	var sim = SimulationScript.new()
+	assert_true(sim.setup(catalog.first_map(), catalog, 1), sim.setup_error)
+	var credits_before: int = sim.economy.credits
+	var event: Dictionary = _clear_the_wave(sim)
+	assert_eq(int(event["bonus"]), 0)
+	# One tower bought (-100) and one enemy killed (+10 bounty), no clear bonus.
+	assert_eq(sim.economy.credits, credits_before - 100 + 10)
+
+
+# ---------------------------------------------------------------------------
+# Leak events name the enemy that leaked
+# ---------------------------------------------------------------------------
+
+func test_leak_event_carries_the_enemy_def_id() -> void:
+	# No tower: the enemy walks the whole path and leaks.
+	var sim = _make()["sim"]
+	sim.start_next_wave()
+	var leak: Dictionary = {}
+	for i in 400:
+		sim.step()
+		for event in sim.drain_events():
+			if int(event["type"]) == Types.Event.ENEMY_LEAKED:
+				leak = event
+				break
+		if not leak.is_empty():
+			break
+	assert_false(leak.is_empty(), "the enemy should have reached the goal")
+	assert_eq(str(leak["def_id"]), "test_enemy",
+		"the enemy is compacted away this tick, so the event must name it")
+	assert_eq(int(leak["lives_lost"]), 1)

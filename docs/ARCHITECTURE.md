@@ -95,7 +95,7 @@ This class of event needs its own check. The cheapest is an assertion in the aut
 
 * **Float positions.** Fine for single player, would need fixed-point for lockstep netcode.
 * **`_tower_by_id` is a linear scan.** Towers number in the dozens; a dictionary is premature until they don't.
-* **No render interpolation.** The sim runs at 60 Hz and most displays do too. At 144 Hz there is visible stepping. The fix is to interpolate in `level.gd::sync()` using the accumulator remainder from `main.gd` — deliberately deferred, listed in the backlog.
+* ~~**No render interpolation.**~~ **Shipped.** `main.gd` calls `level.capture_tick_start()` inside the step loop and passes the accumulator remainder into `sync()`; views blend between the two. Capturing inside the loop rather than in front of it is the load-bearing detail — after a catch-up burst the interpolation source must be the second-to-last tick. 900 tick hashes are identical with and without the view layer attached.
 * **View nodes are created per entity.** Fine at current counts. If wave sizes reach the hundreds, enemies should move to a `MultiMeshInstance3D` the way the board already does.
 
 ## Adding a dependency

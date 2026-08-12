@@ -302,10 +302,15 @@ func _beam_segment(from: Vector3, to: Vector3, length: float, radius: float,
 	add_child(instance)
 	instance.position = (from + to) * 0.5
 	# CylinderMesh runs along +Y, so aim -Z at the target then tip it forward.
+	#
+	# Basis.looking_at rather than look_at(): look_at() asserts the node is
+	# already inside the SceneTree. This one gets away with it because a beam is
+	# only ever spawned from a live frame, but it is the same shape as the bug
+	# that was firing an error per projectile per frame, and there is no reason
+	# to leave the last instance of it standing.
 	var direction: Vector3 = (to - from).normalized()
 	var up: Vector3 = Vector3.UP if absf(direction.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	instance.look_at(to, up)
-	instance.rotate_object_local(Vector3.RIGHT, PI * 0.5)
+	instance.basis = Basis.looking_at(to - instance.position, up) * Basis(Vector3.RIGHT, PI * 0.5)
 	return instance
 
 

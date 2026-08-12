@@ -31,17 +31,37 @@ Rulings the lead has made that agents may act on without asking again.
 
 | Decision | Ruling |
 | --- | --- |
-| `starting_credits` may leave the ±60 band in `difficulty.md` §7 | **Granted, once.** The harness found a 0% win rate at 320 across every policy, with the playable range sitting at 560–960. A knob whose entire useful range is outside its declared bounds was mis-declared, not mis-used. A3 may set it anywhere in 320–960 to hit the gates. A2 updates §7's band afterwards to match what the measurement found. |
-| Percentile gates over seeds | **Void until re-specified.** `sim/rng.gd` is never drawn from, so runs differing only by seed are byte-identical and every percentile in `difficulty.md` §4 has a sample size of one. A2 must restate those gates over the *policy* space (build order, placement, save timing), which is what the harness actually sweeps. Do not add randomness to the sim to fix this. |
-| Art may not edit `.tres` while a balance pass is running | **Enforced.** A5 and A3 both write `data/enemies/*.tres` — one for `mesh_path`, one for `max_hp`. With no git, that is a clobber. A5 records the field edits it needs in `art/PENDING.md` and A3 or the lead applies them. |
+| `starting_credits` may leave the ±60 band in `difficulty.md` §7 | **Granted, once — and now spent.** The harness found a 0% win rate at 320 with the playable range at 560–960. A3 landed on **640**; A2 rewrote §7 to anchor the band to the measurement. Closed. The rule it established stands: *a knob's band is anchored to a measurement, or it is marked provisional.* |
+| Percentile gates over seeds | **Resolved.** `difficulty.md` revision 2 restates G1–G9 over policy classes, and `maps.md` §2.5 and §4.5 follow for F1–F8 and C1–C8. Exact counts, no confidence intervals. Do not add randomness to the sim to fix a dead seed axis — if a future mechanic legitimately needs it, seeds become a *second* axis, never a replacement. |
+| Art may not edit `.tres` while a balance pass is running | **Enforced, and it worked.** A5 opened no `.tres` this session and logged every needed edit in `art/PENDING.md`. Verified by diff: the four shipped `data/enemies/*.tres` show balance-field changes only, with `mesh_path`, `mesh_scale` and the colour fields untouched. Keep the convention — it is the only reason there is no clobber to report. |
+| `walker.tres` height 1.3 vs a measured model crown of 1.173 (`PENDING.md` §2) | **(b) — fix the def to 1.18.** A5's own lean, and the right one. Nothing about the Walker looks wrong today, the new five-model roster was drawn against its current size, and option (a) shrinks the Mender's clearance from 0.21 to 0.08 — a gap `enemies.md` deliberately relies on for wave 9 pickability. Honesty about the def is worth less than a silhouette ladder that already reads correctly. A3 applies the one-line edit; A5 deletes the PENDING entry. |
+| Arc Cannon: `difficulty.md` §5's failing anchor vs the balance pass | **See "Open seams" below — unresolved, and the day's first decision.** |
 
 ### Open seams
 
-| Event | Producer | Consumer | Status |
+| Event / seam | Producer | Consumer | Status (verified on disk, 12 Aug 2026) |
 | --- | --- | --- | --- |
-| `TOWER_UPGRADED` | A3 (ROADMAP 2.2) | A4 (`level.gd`, swap the view's mesh and def) | **Not built. CI cannot catch this one.** |
+| `TOWER_UPGRADED` | A3 (ROADMAP 2.2) | A4 (`level.gd`, swap the view's mesh and def) | **Neither half exists.** Not in `sim/sim_types.gd`'s `Event` enum, not in `level.gd`. Clean — no orphan. CI cannot catch this one. |
+| `ENEMY_HEALED` | A3 (Mender, `enemies.md` §2) | A4 (pulse ring + health bar) | **Not built.** Same mutate-only class as `TOWER_UPGRADED` — a healed enemy whose bar doesn't move reads as a bug and no gate will say so. |
+| `tower_inspected(cell)` | A4 (`level.gd:12`, emitted at `:601`) | **Nobody** | **Deliberate, and correct.** A signal, not a sim event, so no view is orphaned and no gate is at risk. It is the hook ROADMAP 2.3 hangs off, and it means selection has exactly one owner before any UI depends on it. |
+| Arc Cannon 90 → 110 | A2 (`difficulty.md` §5 asks for **damage** 90→110) | A3 (shipped **cost** 90→110, damage still 90) | **Contradiction. Needs an A1 ruling — see below.** |
+| Five enemy models with no defs | A5 (`.glb` × 5 exported) | A3 (`data/enemies/*.tres` × 5) | **Half-built.** `Catalog` scans `data/enemies/`, so a model with no def is inert, not broken. Specs are in `art/PENDING.md` §1 (presentation) and `enemies.md` §2 (balance). |
+| Per-map prop table | A5 (snow kit × 8 exported) | A3 (`MapDef` field) or A4 (`board.gd`) | **Blocked on a decision.** `board.gd::_scatter_props()` hardcodes seven grassland paths. `PENDING.md` §4b proposes a weighted list on `MapDef` — that serves both and also wires `crystal.glb`, which is built by nothing and scattered by nobody. |
 
-`TOWER_UPGRADED` needs flagging louder than the others, and A2 spotted why: it *mutates* a view rather than creating or destroying one, so the autoplay view-count assert stays green while an upgraded tower wears its old mesh and fires at its new rate. See `ARCHITECTURE.md` — "What the view-count invariant does not catch". Whichever agent ships their half first must say so in their report, because nothing automated will.
+**`TOWER_UPGRADED` still needs flagging louder than the others**, and A2 spotted why: it *mutates* a view rather than creating or destroying one, so the autoplay view-count assert stays green while an upgraded tower wears its old mesh and fires at its new rate. See `ARCHITECTURE.md` — "What the view-count invariant does not catch". `ENEMY_HEALED` is the second member of that class, which makes it worth building the check itself rather than remembering twice: an assert in the autoplay runner that a view's `def_id` matches the sim's after any mutating command generalises to every future mutate-only event. Whichever agent ships their half first must say so in their report, because nothing automated will.
+
+### The Arc Cannon contradiction
+
+`difficulty.md` §5 carries an anchor as a *measured failure*: "a lone drone must lose to a lone, well-placed Arc Cannon — and today it does not." One transit is five shots; at 90 damage × 110% vs Light that is 495 against 600 HP. The drone walks out. The stated fix is **damage 90 → 110** (five shots → 605), and `upgrades.md` §9 has already pre-committed Overclock to rescale with it.
+
+The balance pass instead moved **cost** 90 → 110 and left damage at 90. On disk today: `cost = 110`, `damage = 90`. The anchor is still failing and no Done-list note mentions it.
+
+This is not obviously a mistake, and that is what makes it a lead decision rather than a bug report. The two changes point in opposite directions and both are defensible:
+
+- **Design wants the Arc stronger.** The anchor is the first thing a player ever watches happen, and watching one cannon fail to kill one drone teaches the wrong lesson on wave 1.
+- **Balance wants the Arc weaker.** The pass's central finding was that spamming the cheapest tower beat the designed kit at every credit level. Raising Arc damage lifts S1 faster than S2 and pushes directly against G1 and G5.
+
+Both may be satisfiable at once — damage up *and* cost up makes one Arc kill one drone while keeping massed Arcs expensive — but that is a claim to measure, not to assert. Route: A3 re-runs the sweep with `damage = 110, cost = 110` and reports G1/G5 before deciding. If the gates hold, ship it and let Overclock rescale. If they do not, the anchor is the thing that gives, and A2 rewrites §5 to say why — an anchor that survives its own disproof is how a design document stops being falsifiable.
 
 ---
 
@@ -69,47 +89,67 @@ Second question: **can the context be written down?** `AGENTS.md` and the tests 
 
 ## Order of work
 
+*Revised 12 Aug 2026. Everything in the old NOW and NEXT blocks shipped overnight — harness, interpolation, audio, selection, difficulty target, upgrade design, enemy design. The plan below replaces it.*
+
 ```
 NOW (parallel, zero shared files)
-  A3 ─ balance harness (0.1) ──────────→ unblocks every tuning decision
-  A4 ─ render interpolation (1.1) ─────→ largest remaining visible delta
-  A1 ─ git init, doc upkeep, art
-  A2 ─ difficulty target (0.3) + upgrade branch design
+  A3 ─ Arc Cannon ruling: re-sweep damage=110/cost=110, report G1+G5
+     └ then the five enemy defs (unblocks A5's models, already on disk)
+  A4 ─ InputMap (2.1)  ←── HARD BLOCKER on 2.2, and it is now the only one
+  A2 ─ voice.md pass on the 10x damage scale (is "272" ever player-facing?)
+  A5 ─ Fission Spawn model  ←── the only unblocked art on the list
+  A1 ─ commit the overnight work per-agent; doc upkeep
 
 NEXT
-  A3 ─ damage table instrumentation (0.2) → first balance pass (0.4)
-  A4 ─ audio (1.2), selection feedback (1.3)
-  A2 ─ enemy ability design, wave choreography
+  A4 ─ tower inspection UI (2.3)  ←── tower_inspected() already emitted
+  A3 ─ tower upgrades (2.2)  ←── needs A4's InputMap first
+  A3 ─ exposure-seconds column in the harness (difficulty.md 5 directive)
+  A2 ─ reconcile difficulty.md 4 with the harness's implemented gates
 
 THEN
-  A4 ─ InputMap (2.1)  ←── before A3 ships anything with a hotkey
-  A3 ─ tower upgrades (2.2)  ←── needs A2's branching decision first
+  A5 ─ upgrade-tier visuals  ←── needs A3's upgrade schema first
   A3 ─ status effects (2.4) → flying (2.5) → abilities (2.6)
-  A1 ─ upgrade-tier visuals  ←── needs A3's upgrade schema first
+  A4 ─ chill visual (1.6 second half), path flow (1.5)
 ```
 
-**Three hard dependencies:**
+**Four hard dependencies:**
 
-1. **Nothing balance-related is real until A3 ships the harness.** Autoplay currently loses on wave 3 with four towers standing and nobody knows why.
-2. **InputMap (A4) before new hotkeys (A3).** The cost compounds with every mechanic added.
+1. ~~Nothing balance-related is real until A3 ships the harness.~~ **Discharged.** The harness shipped and the first pass landed at 8 of 9 gates.
+2. **InputMap (A4) before new hotkeys (A3).** Unchanged, and now the critical path — 2.2 is spec-complete in `upgrades.md` and waiting on nothing else.
 3. **Status effects (A3, 2.4) before enemy abilities (2.6) and bosses.** Both lean on the same schema; building them in the wrong order means designing it twice.
+4. **The five enemy defs (A3) before any of A5's five models do anything.** The `.glb` files are exported and `Catalog` scans `data/enemies/` — a model with no def is inert, not broken, so nothing is red. It is just five assets doing nothing.
+
+**One measurement caveat that outranks most of the above.** The nine gates in `difficulty.md` §4 and the nine `_gate()` calls in `tests/run_balance.gd` are not the same nine. Three drift:
+
+| Gate | `difficulty.md` §4 says | `run_balance.gd` implements |
+| --- | --- | --- |
+| G2 | no winning S2 policy finishes below 8 | 5th percentile ≥ 8 |
+| G3 | median idle ≤ **30% of the tuned start** (192 at 640) | median idle ≤ **200**, hardcoded |
+| G9 | ≥ 1 policy at 20/20 **and < 25% of the class** | flawless rate ≥ 10%, **no upper bound** |
+
+G2 and G9 matter most. Over an *exact enumeration* a 5th percentile is a different claim from "no policy" — the harness's own comment at line 493 reads the clause the strict way while the code does not. And G9's missing upper bound means the harness cannot fail the gate for flawless being *too routine*, which is half of what the gate is for. "8 of 9 gates pass" is a statement about the harness's nine. Reconcile before quoting it again.
 
 ---
 
 ## Before you open any of them
 
-**There is no git repository.** Four agents writing to one working tree, no history, no undo.
+**Git exists now** — two commits, the second at 02:47 on 12 Aug 2026. The undo button is real. Two things it is not yet doing:
+
+1. **Everything after 02:47 is uncommitted.** The entire overnight run — the balance pass, audio, selection feedback, the range ring, damage numbers, five enemy models, the snow kit, three design-doc revisions — sits as one undifferentiated working-tree diff across 31 modified and ~35 untracked files. It is recoverable, which is the whole point, but it is not *attributable*: there is no way to revert A3's balance pass without also reverting A4's audio.
+
+2. **Nobody is branching.** The design was a branch per agent, merged by A1. In practice all five wrote to the working tree directly.
+
+Cheapest fix, and it is still measured in seconds — commit the overnight work in per-agent chunks so the lanes stay separable:
 
 ```bash
 cd <project>
-git init
-git add -A
-git commit -m "Vertical slice: sim, art pipeline, procedural board, lighting, effects"
+git add data/ sim/ tests/ scripts/ && git commit -m "A3: balance pass, wave_clear_bonus to MapDef, leak def_id, status in hash"
+git add game/ && git commit -m "A4: audio, selection feedback, range ring shader, damage numbers"
+git add art/ data/models/ && git commit -m "A5: five enemy models, snow prop kit, PENDING.md"
+git add docs/ && git commit -m "A2/A1: difficulty rev 2, maps/enemies/upgrades amendments, roadmap upkeep"
 ```
 
-Then a branch per agent, merged by A1. `.gitignore` is already correct.
-
-This is the highest-value thirty seconds available in the project and it gets more valuable with every chat you open.
+Then a branch per agent from here. `.gitignore` is already correct.
 
 ---
 

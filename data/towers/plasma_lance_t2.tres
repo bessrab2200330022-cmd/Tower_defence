@@ -1,0 +1,32 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/tower_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = "plasma_lance_t2"
+display_name = "Focused Array"
+description = "A tighter beam and a longer reach. Three-shots a Shielded Scout."
+upgrade_ids = PackedStringArray("plasma_lance_t3a")
+tier = 2
+buildable = false
+cost = 145
+sell_refund_percent = 70
+range_world = 14.0
+damage = 660
+damage_type = 1
+fire_interval_ticks = 60
+fire_mode = 0
+projectile_speed = 60.0
+splash_radius = 0.0
+slow_percent = 0
+slow_ticks = 0
+target_mode = 3
+mesh_path = "res://data/models/towers/plasma_lance_t2.glb"
+mesh_scale = 1.0
+projectile_mesh_path = ""
+effect_color = Color(0.55, 0.85, 1, 1)
+body_color = Color(0.55, 0.4, 0.9, 1)
+accent_color = Color(0.6, 0.95, 1, 1)
+body_height = 2.1
+barrel_length = 1.75

@@ -18,12 +18,24 @@ const Fixtures := preload("res://tests/support/fixtures.gd")
 
 const TICKS: int = 400
 
-## Captured pre-refactor. See the note above before touching these.
-const GOLDEN_TICK_100: int = 338979365
-const GOLDEN_TICK_200: int = 3034125975
-const GOLDEN_TICK_300: int = 966800480
-const GOLDEN_TICK_400: int = 698089808
-const GOLDEN_FOLD: int = 4255679929
+## See the note above before touching these.
+##
+## REGENERATED twice, each time `snapshot_hash()` widened: once for
+## `slow_percent`/`slow_ticks_left`, once for the tower's `def_id`. Both widen
+## the fingerprint of every state without altering any state - the scripted
+## match has ended on phase COMBAT with 48 lives, 280 credits, 2 towers and 9
+## enemies alive through all three revisions, which is the check that says a
+## regeneration was legitimate. Verify that before ever regenerating again: if
+## the end state moved, the hash is telling you something and the constants are
+## not the thing to edit.
+##
+## These pin behaviour from here on; they are no longer evidence about the
+## original apply_command refactor. `_run(false)` vs `_run(true)` carries that.
+const GOLDEN_TICK_100: int = 3884201677
+const GOLDEN_TICK_200: int = 1232678415
+const GOLDEN_TICK_300: int = 3363014248
+const GOLDEN_TICK_400: int = 3901190868
+const GOLDEN_FOLD: int = 1639865123
 
 ## One scripted match, expressed as the {tick, action, args} shape a saved
 ## command log will use. Exercises all four commands, including a sell of a

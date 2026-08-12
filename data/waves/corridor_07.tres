@@ -1,0 +1,31 @@
+[gd_resource type="Resource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/schemas/wave_def.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/schemas/spawn_group.gd" id="2_group"]
+
+[sub_resource type="Resource" id="Group_brutes"]
+script = ExtResource("2_group")
+enemy_id = "brute"
+count = 2
+start_delay_ticks = 0
+interval_ticks = 280
+
+[sub_resource type="Resource" id="Group_coursers"]
+script = ExtResource("2_group")
+enemy_id = "courser"
+count = 12
+start_delay_ticks = 160
+interval_ticks = 18
+
+[sub_resource type="Resource" id="Group_drones"]
+script = ExtResource("2_group")
+enemy_id = "drone"
+count = 6
+start_delay_ticks = 700
+interval_ticks = 30
+
+[resource]
+script = ExtResource("1_wave")
+id = "corridor_07"
+display_name = "Undertow"
+groups = [SubResource("Group_brutes"), SubResource("Group_coursers"), SubResource("Group_drones")]
